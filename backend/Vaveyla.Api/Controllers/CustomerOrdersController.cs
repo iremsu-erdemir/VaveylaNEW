@@ -166,11 +166,13 @@ public sealed class CustomerOrdersController : ControllerBase
                 request.UserCouponId);
             var calcResult = await _calculationService.CalculateCartAsync(calcRequest, cancellationToken);
 
-            if (request.UserCouponId.HasValue && !calcResult.CanUseCoupon)
-                return BadRequest(new { message = "Restoran indirimi varken kupon kullanılamaz. Sadece bir indirim uygulanabilir." });
-
-            if (request.UserCouponId.HasValue && calcResult.AppliedUserCouponId == null)
-                return BadRequest(new { message = "Kupon uygulanamadı. Lütfen kupon şartlarını kontrol edin." });
+            if (request.UserCouponId.HasValue && calcResult.CouponDiscountAmount <= 0)
+            {
+                var message = string.IsNullOrWhiteSpace(calcResult.CouponRejectReason)
+                    ? "Kupon uygulanamadı. Lütfen kupon şartlarını kontrol edin."
+                    : calcResult.CouponRejectReason;
+                return BadRequest(new { message });
+            }
 
             var itemsStr = string.Join(", ", cartItems.Select(c =>
                 c.SaleUnit == ProductSaleUnit.PerSlice

@@ -17,6 +17,7 @@ class CartLoaded extends CartState {
   final double couponDiscountAmount;
   final String? selectedUserCouponId;
   final bool hasRestaurantDiscountSkippedForCoupon;
+  final String? couponRejectReason;
 
   CartLoaded({
     required this.items,
@@ -30,6 +31,7 @@ class CartLoaded extends CartState {
     this.couponDiscountAmount = 0,
     this.selectedUserCouponId,
     this.hasRestaurantDiscountSkippedForCoupon = false,
+    this.couponRejectReason,
   }) : finalPrice = finalPrice ?? totalAmount;
 
   double get totalSavings => totalDiscount;
@@ -46,6 +48,7 @@ class CartLoaded extends CartState {
     double? couponDiscountAmount,
     String? selectedUserCouponId,
     bool? hasRestaurantDiscountSkippedForCoupon,
+    String? couponRejectReason,
   }) {
     return CartLoaded(
       items: items ?? this.items,
@@ -59,6 +62,7 @@ class CartLoaded extends CartState {
       couponDiscountAmount: couponDiscountAmount ?? this.couponDiscountAmount,
       selectedUserCouponId: selectedUserCouponId ?? this.selectedUserCouponId,
       hasRestaurantDiscountSkippedForCoupon: hasRestaurantDiscountSkippedForCoupon ?? this.hasRestaurantDiscountSkippedForCoupon,
+      couponRejectReason: couponRejectReason ?? this.couponRejectReason,
     );
   }
 }

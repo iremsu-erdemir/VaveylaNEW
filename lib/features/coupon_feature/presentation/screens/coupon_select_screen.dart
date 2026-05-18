@@ -12,9 +12,12 @@ class CouponSelectScreen extends StatefulWidget {
   const CouponSelectScreen({
     super.key,
     this.selectedUserCouponId,
+    this.cartRestaurantId,
   });
 
   final String? selectedUserCouponId;
+  /// Sepetteki restoran; restoran özel kuponları buna göre filtrelenir.
+  final String? cartRestaurantId;
 
   @override
   State<CouponSelectScreen> createState() => _CouponSelectScreenState();
@@ -55,7 +58,7 @@ class _CouponSelectScreenState extends State<CouponSelectScreen> {
         final sel = _selectedId;
         if (sel != null && sel.isNotEmpty) {
           final stillUsable = list.any(
-            (c) => c.userCouponId == sel && c.isUsable,
+            (c) => c.userCouponId == sel && c.canUseInCart(widget.cartRestaurantId),
           );
           if (!stillUsable) {
             _selectedId = null;
@@ -72,7 +75,7 @@ class _CouponSelectScreenState extends State<CouponSelectScreen> {
   }
 
   void _onSelect(UserCouponModel coupon) {
-    if (!coupon.isUsable) return;
+    if (!coupon.canUseInCart(widget.cartRestaurantId)) return;
     setState(() {
       _selectedId = _selectedId == coupon.userCouponId ? null : coupon.userCouponId;
     });
@@ -91,7 +94,7 @@ class _CouponSelectScreenState extends State<CouponSelectScreen> {
         break;
       }
     }
-    if (match == null || !match.isUsable) {
+    if (match == null || !match.canUseInCart(widget.cartRestaurantId)) {
       Navigator.of(context).pop('');
       return;
     }
@@ -100,10 +103,14 @@ class _CouponSelectScreenState extends State<CouponSelectScreen> {
 
   /// Kullanılabilirler önce, ardından pasif (kullanılmış / süresi dolmuş / onay bekleyen).
   List<UserCouponModel> get _couponsDisplayOrder {
-    final usable = _coupons.where((c) => c.isUsable).toList();
-    final passive = _coupons.where((c) => !c.isUsable).toList();
+    final usable =
+        _coupons.where((c) => c.canUseInCart(widget.cartRestaurantId)).toList();
+    final passive =
+        _coupons.where((c) => !c.canUseInCart(widget.cartRestaurantId)).toList();
     return [...usable, ...passive];
   }
+
+  String? get _cartRestaurantId => widget.cartRestaurantId;
 
   @override
   Widget build(BuildContext context) {
@@ -153,8 +160,9 @@ class _CouponSelectScreenState extends State<CouponSelectScreen> {
                           ),
                         );
                       }
-                      final usableCount =
-                          _coupons.where((c) => c.isUsable).length;
+                      final usableCount = _coupons
+                          .where((c) => c.canUseInCart(_cartRestaurantId))
+                          .length;
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -171,8 +179,9 @@ class _CouponSelectScreenState extends State<CouponSelectScreen> {
                           ..._couponsDisplayOrder.map(
                             (c) => _CouponTile(
                               coupon: c,
-                              selected:
-                                  c.isUsable && _selectedId == c.userCouponId,
+                              cartRestaurantId: _cartRestaurantId,
+                              selected: c.canUseInCart(_cartRestaurantId) &&
+                                  _selectedId == c.userCouponId,
                               onTap: () => _onSelect(c),
                             ),
                           ),
@@ -183,12 +192,15 @@ class _CouponSelectScreenState extends State<CouponSelectScreen> {
                   SizedBox(height: Dimens.extraLargePadding),
                   Builder(
                     builder: (context) {
-                      final canApply = _coupons.any((c) => c.isUsable) &&
+                      final canApply = _coupons.any(
+                            (c) => c.canUseInCart(_cartRestaurantId),
+                          ) &&
                           _selectedId != null &&
                           _selectedId!.isNotEmpty &&
                           _coupons.any(
                             (c) =>
-                                c.userCouponId == _selectedId && c.isUsable,
+                                c.userCouponId == _selectedId &&
+                                c.canUseInCart(_cartRestaurantId),
                           );
                       return AppButton(
                         title: 'Uygula',
@@ -208,11 +220,13 @@ class _CouponSelectScreenState extends State<CouponSelectScreen> {
 class _CouponTile extends StatelessWidget {
   const _CouponTile({
     required this.coupon,
+    required this.cartRestaurantId,
     required this.selected,
     required this.onTap,
   });
 
   final UserCouponModel coupon;
+  final String? cartRestaurantId;
   final bool selected;
   final VoidCallback onTap;
 
@@ -220,7 +234,7 @@ class _CouponTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final appColors = context.theme.appColors;
     final appTypography = context.theme.appTypography;
-    final isPassive = !coupon.isUsable;
+    final isPassive = !coupon.canUseInCart(cartRestaurantId);
 
     final borderColor = isPassive
         ? appColors.gray2.withValues(alpha: 0.55)
@@ -295,7 +309,7 @@ class _CouponTile extends StatelessWidget {
                             ),
                           ),
                         )
-                      else if (coupon.isExpired)
+                      else if (coupon.isExpired || coupon.isExpiredByDate)
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
@@ -305,11 +319,23 @@ class _CouponTile extends StatelessWidget {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
+                        )
+                      else if (coupon.isUsable &&
+                          !coupon.canUseInCart(cartRestaurantId))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            'Bu kupon sepetinizdeki restoran için geçerli değil',
+                            style: appTypography.bodySmall.copyWith(
+                              color: appColors.gray4,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                     ],
                   ),
                 ),
-                if (coupon.isUsable)
+                if (coupon.canUseInCart(cartRestaurantId))
                   Padding(
                     padding: const EdgeInsets.only(left: 4, top: 2),
                     child: Icon(

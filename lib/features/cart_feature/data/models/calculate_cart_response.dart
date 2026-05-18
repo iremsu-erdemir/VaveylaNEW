@@ -12,6 +12,7 @@ class CalculateCartResponse {
   final double couponDiscountAmount;
   final String? appliedUserCouponId;
   final bool hasRestaurantDiscountSkippedForCoupon;
+  final String? couponRejectReason;
 
   CalculateCartResponse({
     required this.items,
@@ -27,6 +28,7 @@ class CalculateCartResponse {
     this.couponDiscountAmount = 0,
     this.appliedUserCouponId,
     this.hasRestaurantDiscountSkippedForCoupon = false,
+    this.couponRejectReason,
   });
 
   factory CalculateCartResponse.fromJson(Map<String, dynamic> json) {
@@ -56,6 +58,7 @@ class CalculateCartResponse {
       couponDiscountAmount: CalculateCartResponse._parseDouble(json['couponDiscountAmount']) ?? 0,
       appliedUserCouponId: json['appliedUserCouponId']?.toString(),
       hasRestaurantDiscountSkippedForCoupon: json['hasRestaurantDiscountSkippedForCoupon'] == true,
+      couponRejectReason: json['couponRejectReason']?.toString(),
     );
   }
 

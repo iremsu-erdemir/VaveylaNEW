@@ -67,6 +67,18 @@ public static class DbSeeder
 
     private static async Task EnsureCouponsAsync(VaveylaDbContext db, CancellationToken ct)
     {
+        // Mevcut SAVE20: %20 tam uygulansın (100→80, 500→400); eski max 30 TL tavanını kaldır.
+        var save20 = await db.Coupons.FirstOrDefaultAsync(c => c.Code == "SAVE20", ct);
+        if (save20 != null)
+        {
+            save20.Description = "%20 indirim, min 100 TL sepet";
+            save20.DiscountType = CouponDiscountType.Percentage;
+            save20.DiscountValue = 20;
+            save20.MinCartAmount = 100;
+            save20.MaxDiscountAmount = null;
+            await db.SaveChangesAsync(ct);
+        }
+
         var exists = await db.Coupons.AnyAsync(c => c.Code == "SAVE20", ct);
         if (exists) return;
 
@@ -74,11 +86,11 @@ public static class DbSeeder
         {
             CouponId = Guid.NewGuid(),
             Code = "SAVE20",
-            Description = "%20 indirim, max 30 TL, min 100 TL sepet",
+            Description = "%20 indirim, min 100 TL sepet",
             DiscountType = CouponDiscountType.Percentage,
             DiscountValue = 20,
             MinCartAmount = 100,
-            MaxDiscountAmount = 30,
+            MaxDiscountAmount = null,
             ExpiresAtUtc = DateTime.UtcNow.AddMonths(3),
             RestaurantId = null,
             CreatedAtUtc = DateTime.UtcNow,

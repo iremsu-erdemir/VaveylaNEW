@@ -71,7 +71,7 @@ class CartCubit extends Cubit<CartState> {
             final id = c.productId.toLowerCase();
             if (id.isNotEmpty) calcByProduct[id] = c;
           }
-          final merged = _items.map((item) {
+          var merged = _items.map((item) {
             final calcItem = calcByProduct[item.product.id.toLowerCase()];
             if (calcItem != null) {
               return item.copyWith(
@@ -81,6 +81,11 @@ class CartCubit extends Cubit<CartState> {
             }
             return item;
           }).toList();
+          // API satır eşleşmesi yoksa toplam indirimi satırlara orantılı dağıt (100→80 görünümü)
+          if (calc.totalDiscount > 0 &&
+              merged.every((item) => !item.hasDiscount)) {
+            merged = _distributeLineDiscounts(merged, calc.totalDiscount);
+          }
           _items
             ..clear()
             ..addAll(merged);
@@ -90,6 +95,14 @@ class CartCubit extends Cubit<CartState> {
                 'restaurantDiscountAmount=${calc.restaurantDiscountAmount} '
                 'hasRestaurantDiscountSkippedForCoupon=${calc.hasRestaurantDiscountSkippedForCoupon} '
                 'finalPrice=${calc.finalPrice}');
+          }
+          final couponRejected = _selectedUserCouponId != null &&
+              _selectedUserCouponId!.isNotEmpty &&
+              calc.couponDiscountAmount <= 0 &&
+              calc.couponRejectReason != null &&
+              calc.couponRejectReason!.isNotEmpty;
+          if (couponRejected) {
+            _selectedUserCouponId = null;
           }
           emit(CartLoaded(
             items: List.from(_items),
@@ -101,8 +114,9 @@ class CartCubit extends Cubit<CartState> {
             restaurantDiscountAmount: calc.restaurantDiscountAmount,
             canUseCoupon: calc.canUseCoupon,
             couponDiscountAmount: calc.couponDiscountAmount,
-            selectedUserCouponId: _selectedUserCouponId,
+            selectedUserCouponId: couponRejected ? null : _selectedUserCouponId,
             hasRestaurantDiscountSkippedForCoupon: calc.hasRestaurantDiscountSkippedForCoupon,
+            couponRejectReason: couponRejected ? calc.couponRejectReason : null,
           ));
           return;
         }
@@ -260,6 +274,43 @@ class CartCubit extends Cubit<CartState> {
       }
     }
     return false;
+  }
+
+  /// Sepet indirimini satır fiyatlarına orantılı yansıtır (%20 kupon → 100 TL ürün 80 TL).
+  static List<CartItemModel> _distributeLineDiscounts(
+    List<CartItemModel> items,
+    double totalDiscount,
+  ) {
+    if (items.isEmpty || totalDiscount <= 0) return items;
+
+    final lines = items.map((item) {
+      final original = item.originalLinePrice;
+      if (original != null && original > 0) return original;
+      return item.product.price * item.quantity;
+    }).toList();
+    final totalOriginal = lines.fold<double>(0, (sum, v) => sum + v);
+    if (totalOriginal <= 0) return items;
+
+    var allocated = 0.0;
+    final updated = <CartItemModel>[];
+    for (var i = 0; i < items.length; i++) {
+      final item = items[i];
+      final lineOriginal = lines[i];
+      final isLast = i == items.length - 1;
+      final lineDiscount = isLast
+          ? totalDiscount - allocated
+          : double.parse(
+              (totalDiscount * (lineOriginal / totalOriginal)).toStringAsFixed(2),
+            );
+      allocated += lineDiscount;
+      updated.add(
+        item.copyWith(
+          originalLinePrice: lineOriginal,
+          discountedLinePrice: (lineOriginal - lineDiscount).clamp(0.0, double.infinity),
+        ),
+      );
+    }
+    return updated;
   }
 
   /// Uzun SQL / stack trace metinlerini kullanıcıya göstermeyiz.

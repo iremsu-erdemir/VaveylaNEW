@@ -28,6 +28,16 @@ class UserCouponModel {
   });
 
   bool get isUsable => status == 'approved';
+  bool get isExpiredByDate => expiresAtUtc.isBefore(DateTime.now().toUtc());
+
+  /// Sepetteki restoran için bu kupon seçilebilir mi (onaylı + restoran uyumu).
+  bool canUseInCart(String? cartRestaurantId) {
+    if (!isUsable || isExpiredByDate) return false;
+    if (restaurantId == null || restaurantId!.isEmpty) return true;
+    if (cartRestaurantId == null || cartRestaurantId.isEmpty) return true;
+    return restaurantId!.toLowerCase() == cartRestaurantId.toLowerCase();
+  }
+
   bool get isPending => status == 'pending';
   bool get isUsed => status == 'used';
   bool get isExpired => status == 'expired';

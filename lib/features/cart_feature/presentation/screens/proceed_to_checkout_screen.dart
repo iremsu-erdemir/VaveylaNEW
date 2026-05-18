@@ -168,6 +168,10 @@ class _ProceedToCheckoutScreenState extends State<ProceedToCheckoutScreen> {
                       final canUseCoupon = usePassedSummary && s != null
                           ? s.canUseCoupon
                           : loadedState!.canUseCoupon;
+                      final cartRestaurantId = loadedState != null &&
+                              loadedState.items.isNotEmpty
+                          ? loadedState.items.first.product.restaurantId
+                          : null;
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,6 +186,7 @@ class _ProceedToCheckoutScreenState extends State<ProceedToCheckoutScreen> {
                                       (_) => CouponSelectScreen(
                                         selectedUserCouponId:
                                             selectedCouponId,
+                                        cartRestaurantId: cartRestaurantId,
                                       ),
                                 ),
                               );

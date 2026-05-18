@@ -78,13 +78,20 @@ public sealed class CartCalculationService : ICartCalculationService
             $"hasRestaurantDiscount={hasRestaurantDiscount} userCouponId={request.UserCouponId}");
 #endif
 
+        var hasActiveCampaign = await HasActiveCampaignAsync(request.RestaurantId, ct);
+
         // Kural: Müşteri kupon seçtiyse → Sadece kupon, restoran/kampanya indirimi uygulanmaz
-        if ((hasRestaurantDiscount || await HasActiveCampaignAsync(request.RestaurantId, ct)) && request.UserCouponId.HasValue && request.CustomerUserId.HasValue)
+        if (request.UserCouponId.HasValue && request.CustomerUserId.HasValue)
         {
 #if DEBUG
-            Console.WriteLine("[RESTAURANT_DISCOUNT DEBUG] Branch: COUPON_ONLY (müşteri kupon seçti, restoran indirimi atlanıyor)");
+            Console.WriteLine("[RESTAURANT_DISCOUNT DEBUG] Branch: COUPON_ONLY (müşteri kupon seçti)");
 #endif
-            return await CalculateWithCouponOnlyAsync(request, menuItems, commissionRate, ct);
+            return await CalculateWithCouponOnlyAsync(
+                request,
+                menuItems,
+                commissionRate,
+                hasRestaurantDiscount || hasActiveCampaign,
+                ct);
         }
 
         // Kural: Restoran indirimi var ve müşteri kupon seçmemiş → Sadece restoran indirimi
@@ -175,10 +182,32 @@ public sealed class CartCalculationService : ICartCalculationService
     /// Restoran indirimi ve kampanyalar uygulanmaz (600 - 50 = 550 gibi).
     /// Kupon indirimi her ürüne orantılı dağıtılır (checkout ekranında güncel fiyat gösterimi için).
     /// </summary>
+    private async Task<(decimal Discount, Guid? AppliedUserCouponId, string? RejectReason)> ResolveCouponDiscountAsync(
+        CalculateCartRequest request,
+        decimal cartTotal,
+        CancellationToken ct)
+    {
+        if (!request.UserCouponId.HasValue || !request.CustomerUserId.HasValue)
+            return (0, null, null);
+
+        var (amount, error) = await _couponService.CalculateCouponDiscountAsync(
+            request.CustomerUserId.Value,
+            request.RestaurantId,
+            cartTotal,
+            request.UserCouponId.Value,
+            ct);
+
+        if (amount > 0)
+            return (amount, request.UserCouponId, null);
+
+        return (0, null, error ?? "Kupon uygulanamadı. Şartları kontrol edin.");
+    }
+
     private async Task<CalculateCartResponse> CalculateWithCouponOnlyAsync(
         CalculateCartRequest request,
         Dictionary<Guid, MenuItem> menuItems,
         decimal commissionRate,
+        bool skipCompetingDiscount,
         CancellationToken ct)
     {
         var itemResults = new List<CalculateCartItemResponse>();
@@ -203,48 +232,13 @@ public sealed class CartCalculationService : ICartCalculationService
         }
 
         var subtotalBeforeCoupon = totalOriginal;
-        decimal couponDiscount = 0;
-        Guid? appliedUserCouponId = null;
-
-        if (request.UserCouponId.HasValue && request.CustomerUserId.HasValue)
-        {
-            var (amount, _) = await _couponService.CalculateCouponDiscountAsync(
-                request.CustomerUserId.Value,
-                request.RestaurantId,
-                subtotalBeforeCoupon,
-                request.UserCouponId.Value,
-                ct);
-            couponDiscount = amount;
-            appliedUserCouponId = request.UserCouponId;
-        }
+        var (couponDiscount, appliedUserCouponId, couponRejectReason) =
+            await ResolveCouponDiscountAsync(request, subtotalBeforeCoupon, ct);
 
         var totalDiscount = couponDiscount;
         var finalPrice = Math.Max(0, totalOriginal - totalDiscount);
 
-        // Kupon indirimini ürünlere orantılı dağıt (sipariş listesinde güncel fiyat gösterimi için)
-        if (totalOriginal > 0 && totalDiscount > 0)
-        {
-            var updatedItems = new List<CalculateCartItemResponse>();
-            decimal allocatedDiscount = 0;
-            for (var i = 0; i < itemResults.Count; i++)
-            {
-                var item = itemResults[i];
-                var isLast = i == itemResults.Count - 1;
-                var lineDiscount = isLast
-                    ? totalDiscount - allocatedDiscount
-                    : Math.Round(totalDiscount * (item.OriginalPrice / totalOriginal), 2);
-                allocatedDiscount += lineDiscount;
-                var discountedLine = Math.Max(0, item.OriginalPrice - lineDiscount);
-                updatedItems.Add(new CalculateCartItemResponse(
-                    item.ProductId,
-                    item.ProductName,
-                    item.Quantity,
-                    item.OriginalPrice,
-                    discountedLine,
-                    lineDiscount));
-            }
-            itemResults = updatedItems;
-        }
+        itemResults = DistributeDiscountAcrossItems(itemResults, totalOriginal, totalDiscount);
         var restaurantEarning = finalPrice * (1 - commissionRate);
         var platformEarning = finalPrice * commissionRate;
 
@@ -261,7 +255,8 @@ public sealed class CartCalculationService : ICartCalculationService
             CanUseCoupon: true,
             CouponDiscountAmount: couponDiscount,
             AppliedUserCouponId: appliedUserCouponId,
-            HasRestaurantDiscountSkippedForCoupon: true);
+            HasRestaurantDiscountSkippedForCoupon: skipCompetingDiscount,
+            CouponRejectReason: couponRejectReason);
     }
 
     /// <summary>
@@ -296,48 +291,13 @@ public sealed class CartCalculationService : ICartCalculationService
                 0));
         }
 
-        decimal couponDiscount = 0;
-        Guid? appliedUserCouponId = null;
-
-        if (request.UserCouponId.HasValue && request.CustomerUserId.HasValue)
-        {
-            var (amount, _) = await _couponService.CalculateCouponDiscountAsync(
-                request.CustomerUserId.Value,
-                request.RestaurantId,
-                totalOriginal,
-                request.UserCouponId.Value,
-                ct);
-            couponDiscount = amount;
-            appliedUserCouponId = request.UserCouponId;
-        }
+        var (couponDiscount, appliedUserCouponId, couponRejectReason) =
+            await ResolveCouponDiscountAsync(request, totalOriginal, ct);
 
         var totalDiscount = couponDiscount;
         var finalPrice = Math.Max(0, totalOriginal - totalDiscount);
 
-        // Kupon indirimini ürünlere orantılı dağıt (sipariş listesinde güncel fiyat gösterimi için)
-        if (totalOriginal > 0 && totalDiscount > 0)
-        {
-            var updatedItems = new List<CalculateCartItemResponse>();
-            decimal allocatedDiscount = 0;
-            for (var i = 0; i < itemResults.Count; i++)
-            {
-                var item = itemResults[i];
-                var isLast = i == itemResults.Count - 1;
-                var lineDiscount = isLast
-                    ? totalDiscount - allocatedDiscount
-                    : Math.Round(totalDiscount * (item.OriginalPrice / totalOriginal), 2);
-                allocatedDiscount += lineDiscount;
-                var discountedLine = Math.Max(0, item.OriginalPrice - lineDiscount);
-                updatedItems.Add(new CalculateCartItemResponse(
-                    item.ProductId,
-                    item.ProductName,
-                    item.Quantity,
-                    item.OriginalPrice,
-                    discountedLine,
-                    lineDiscount));
-            }
-            itemResults = updatedItems;
-        }
+        itemResults = DistributeDiscountAcrossItems(itemResults, totalOriginal, totalDiscount);
 
         var restaurantEarning = finalPrice * (1 - commissionRate);
         var platformEarning = finalPrice * commissionRate;
@@ -354,7 +314,39 @@ public sealed class CartCalculationService : ICartCalculationService
             RestaurantDiscountAmount: 0,
             CanUseCoupon: true,
             CouponDiscountAmount: couponDiscount,
-            AppliedUserCouponId: appliedUserCouponId);
+            AppliedUserCouponId: appliedUserCouponId,
+            CouponRejectReason: couponRejectReason);
+    }
+
+    private static List<CalculateCartItemResponse> DistributeDiscountAcrossItems(
+        List<CalculateCartItemResponse> itemResults,
+        decimal totalOriginal,
+        decimal totalDiscount)
+    {
+        if (totalOriginal <= 0 || totalDiscount <= 0)
+            return itemResults;
+
+        var updatedItems = new List<CalculateCartItemResponse>();
+        decimal allocatedDiscount = 0;
+        for (var i = 0; i < itemResults.Count; i++)
+        {
+            var item = itemResults[i];
+            var isLast = i == itemResults.Count - 1;
+            var lineDiscount = isLast
+                ? totalDiscount - allocatedDiscount
+                : Math.Round(totalDiscount * (item.OriginalPrice / totalOriginal), 2);
+            allocatedDiscount += lineDiscount;
+            var discountedLine = Math.Max(0, item.OriginalPrice - lineDiscount);
+            updatedItems.Add(new CalculateCartItemResponse(
+                item.ProductId,
+                item.ProductName,
+                item.Quantity,
+                item.OriginalPrice,
+                discountedLine,
+                lineDiscount));
+        }
+
+        return updatedItems;
     }
 
     private static CalculateCartResponse EmptyResponse() =>

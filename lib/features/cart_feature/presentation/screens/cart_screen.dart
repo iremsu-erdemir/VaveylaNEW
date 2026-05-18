@@ -67,6 +67,10 @@ class CartScreen extends StatelessWidget {
               ),
             );
           } else if (state is CartLoaded) {
+            final cartRestaurantId =
+                state.items.isNotEmpty
+                    ? state.items.first.product.restaurantId
+                    : null;
             if (state.items.isEmpty) {
               return Center(
                 child: Column(
@@ -112,6 +116,7 @@ class CartScreen extends StatelessWidget {
                                   (_) => CouponSelectScreen(
                                     selectedUserCouponId:
                                         state.selectedUserCouponId,
+                                    cartRestaurantId: cartRestaurantId,
                                   ),
                             ),
                           );
@@ -154,6 +159,38 @@ class CartScreen extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (state.couponRejectReason != null &&
+                          state.couponRejectReason!.isNotEmpty)
+                        Padding(
+                          padding: EdgeInsets.only(bottom: Dimens.padding),
+                          child: Container(
+                            padding: EdgeInsets.all(Dimens.padding),
+                            decoration: BoxDecoration(
+                              color: appColors.error.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(
+                                Dimens.smallCorners,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.error_outline,
+                                  size: 18,
+                                  color: appColors.error,
+                                ),
+                                SizedBox(width: Dimens.padding),
+                                Expanded(
+                                  child: Text(
+                                    state.couponRejectReason!,
+                                    style: appTypography.bodySmall.copyWith(
+                                      color: appColors.error,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       if (state.hasRestaurantDiscountSkippedForCoupon)
                         Padding(
                           padding: EdgeInsets.only(bottom: Dimens.padding),

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -218,7 +219,9 @@ public sealed class AdminCouponsController : ControllerBase
     }
 }
 
-public sealed record AssignCouponToCustomerRequest(Guid CouponId, Guid CustomerUserId);
+public sealed record AssignCouponToCustomerRequest(
+    [property: JsonPropertyName("couponId")] Guid CouponId,
+    [property: JsonPropertyName("customerUserId")] Guid CustomerUserId);
 
 public sealed record CreateCouponRequest(
     string Code,

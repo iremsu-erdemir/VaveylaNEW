@@ -101,8 +101,13 @@ public sealed class CouponService : ICouponService
         decimal discount;
         if (coupon.DiscountType == CouponDiscountType.Percentage)
         {
-            discount = cartTotalAfterOtherDiscounts * (coupon.DiscountValue / 100m);
-            if (coupon.MaxDiscountAmount.HasValue && discount > coupon.MaxDiscountAmount.Value)
+            // DiscountValue: yüzde (örn. 20 = %20 → 100 TL sepette 20 TL indirim, ödenecek 80 TL)
+            var percent = coupon.DiscountValue;
+            if (percent is > 0 and <= 1m)
+                percent *= 100m; // 0.2 gibi kayıtlar için geriye dönük uyumluluk
+            percent = Math.Clamp(percent, 0m, 100m);
+            discount = cartTotalAfterOtherDiscounts * (percent / 100m);
+            if (coupon.MaxDiscountAmount is > 0 && discount > coupon.MaxDiscountAmount.Value)
                 discount = coupon.MaxDiscountAmount.Value;
         }
         else

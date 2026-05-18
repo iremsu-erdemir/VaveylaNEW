@@ -36,7 +36,8 @@ public sealed record CalculateCartResponse(
     [property: JsonPropertyName("canUseCoupon")] bool CanUseCoupon = true,
     [property: JsonPropertyName("couponDiscountAmount")] decimal CouponDiscountAmount = 0,
     [property: JsonPropertyName("appliedUserCouponId")] Guid? AppliedUserCouponId = null,
-    [property: JsonPropertyName("hasRestaurantDiscountSkippedForCoupon")] bool HasRestaurantDiscountSkippedForCoupon = false);
+    [property: JsonPropertyName("hasRestaurantDiscountSkippedForCoupon")] bool HasRestaurantDiscountSkippedForCoupon = false,
+    [property: JsonPropertyName("couponRejectReason")] string? CouponRejectReason = null);
 
 public sealed record CampaignDto(
     Guid CampaignId,
