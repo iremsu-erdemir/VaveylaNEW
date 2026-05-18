@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_sweet_shop_app_ui/core/models/user_address.dart';
+import 'package:flutter_sweet_shop_app_ui/core/utils/guid_utils.dart';
 import 'package:flutter_sweet_shop_app_ui/core/services/app_session.dart';
 import 'package:flutter_sweet_shop_app_ui/core/services/user_address_service.dart';
 import 'package:flutter_sweet_shop_app_ui/core/theme/dimens.dart';
@@ -91,7 +92,15 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
       setState(() {
         _savedAddresses
           ..clear()
-          ..addAll(addresses);
+          ..addAll(
+            addresses
+                .map((a) {
+                  final id = tryExtractUuid(a.addressId);
+                  if (id == null) return null;
+                  return a.copyWith(addressId: id);
+                })
+                .whereType<UserAddress>(),
+          );
       });
     } catch (error, stackTrace) {
       if (kDebugMode) {
@@ -117,7 +126,16 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
     if (_isSaving || address.isSelected) {
       return;
     }
-    _markSelectedLocally(address.addressId);
+    final addressGuid = tryExtractUuid(address.addressId);
+    if (addressGuid == null) {
+      _showMessage(
+        'Adres kimliği geçersiz. Liste yenileniyor.',
+        context.theme.appColors.error,
+      );
+      await _loadAddresses(showLoader: false);
+      return;
+    }
+    _markSelectedLocally(addressGuid);
     final success = await _updateAddress(
       address: address,
       label: address.label,
@@ -161,7 +179,9 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
       setState(() => _applyCreatedAddress(created));
       await _loadAddresses(showLoader: false);
       if (mounted) {
-        if (!_savedAddresses.any((a) => a.addressId == created.addressId)) {
+        final createdId = tryExtractUuid(created.addressId);
+        if (createdId != null &&
+            !_savedAddresses.any((a) => a.addressId == createdId)) {
           setState(() => _applyCreatedAddress(created));
         }
         _showMessage(
@@ -179,11 +199,18 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
 
   /// Yeni oluşturulan adresi seçili olacak şekilde listeye ekler (yoksa).
   void _applyCreatedAddress(UserAddress created) {
+    final createdId = tryExtractUuid(created.addressId);
+    if (createdId == null) return;
+
+    final sanitized = created.copyWith(addressId: createdId);
     for (var i = 0; i < _savedAddresses.length; i++) {
       _savedAddresses[i] = _savedAddresses[i].copyWith(isSelected: false);
     }
-    if (!_savedAddresses.any((a) => a.addressId == created.addressId)) {
-      _savedAddresses.add(created);
+    final index = _savedAddresses.indexWhere((a) => a.addressId == createdId);
+    if (index >= 0) {
+      _savedAddresses[index] = sanitized;
+    } else {
+      _savedAddresses.add(sanitized);
     }
   }
 
@@ -279,10 +306,19 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
       return false;
     }
 
+    final addressGuid = tryExtractUuid(address.addressId);
+    if (addressGuid == null) {
+      _showMessage(
+        'Adres kimliği geçersiz.',
+        context.theme.appColors.error,
+      );
+      return false;
+    }
+
     final updated = await _runSaving(() async {
       return await _addressService.updateAddress(
         userId: userId,
-        addressId: address.addressId,
+        addressId: addressGuid,
         label: label,
         addressLine: addressLine,
         addressDetail: addressDetail.isEmpty ? null : addressDetail,
@@ -292,15 +328,20 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
     if (updated == null || !mounted) {
       return false;
     }
+    final updatedId = tryExtractUuid(updated.addressId);
+    if (updatedId == null) {
+      return false;
+    }
+    final sanitized = updated.copyWith(addressId: updatedId);
     setState(() {
-      if (updated.isSelected) {
-        _markSelectedLocally(updated.addressId);
+      if (sanitized.isSelected) {
+        _markSelectedLocally(updatedId);
       }
       final index = _savedAddresses.indexWhere(
-        (x) => x.addressId == updated.addressId,
+        (x) => x.addressId == updatedId,
       );
       if (index != -1) {
-        _savedAddresses[index] = updated;
+        _savedAddresses[index] = sanitized;
       }
     });
     return true;
@@ -321,10 +362,13 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
         debugPrint('$stackTrace');
       }
       if (mounted) {
-        _showMessage(
-          error.toString().replaceFirst('Exception: ', ''),
-          context.theme.appColors.error,
-        );
+        final message = error.toString().replaceFirst('Exception: ', '');
+        final friendly =
+            message.contains('invalid characters') ||
+                    message.contains('Invalid argument')
+                ? 'Adres kaydedilemedi. Lütfen tekrar deneyin.'
+                : message;
+        _showMessage(friendly, context.theme.appColors.error);
       }
       return null;
     } finally {

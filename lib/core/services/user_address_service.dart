@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/user_address.dart';
+import '../utils/guid_utils.dart';
 import 'app_session.dart';
 import 'auth_service.dart';
 
@@ -25,9 +26,9 @@ class UserAddressService {
   }
 
   Future<List<UserAddress>> getAddresses({required String userId}) async {
-    final normalizedUserId = _normalizeId(userId, key: 'userId');
+    final userGuid = _requireUserId(userId);
     final response = await _getWithFallback(
-      path: '/api/users/${Uri.encodeComponent(normalizedUserId)}/addresses',
+      path: '/api/users/$userGuid/addresses',
     );
     final status = response.statusCode;
     if (status >= 200 && status < 300) {
@@ -56,7 +57,7 @@ class UserAddressService {
     String? addressDetail,
     bool isSelected = true,
   }) async {
-    final normalizedUserId = _normalizeId(userId, key: 'userId');
+    final userGuid = _requireUserId(userId);
     final safeLabel = _safeString(label);
     final safeLine = _safeString(addressLine);
     final safeDetail =
@@ -65,7 +66,7 @@ class UserAddressService {
             : _safeString(addressDetail);
     final response = await _requestWithFallback(
       method: 'POST',
-      path: '/api/users/${Uri.encodeComponent(normalizedUserId)}/addresses',
+      path: '/api/users/$userGuid/addresses',
       body: {
         'label': safeLabel,
         'addressLine': safeLine,
@@ -85,7 +86,8 @@ class UserAddressService {
     String? addressDetail,
     required bool isSelected,
   }) async {
-    final normalizedAddressId = _normalizeId(addressId, key: 'addressId');
+    final userGuid = _requireUserId(userId);
+    final addressGuid = _requireAddressId(addressId);
     final safeLabel = _safeString(label);
     final safeLine = _safeString(addressLine);
     final safeDetail =
@@ -94,9 +96,7 @@ class UserAddressService {
             : _safeString(addressDetail);
     final response = await _requestWithFallback(
       method: 'PUT',
-      path:
-          '/api/users/${Uri.encodeComponent(_normalizeId(userId, key: 'userId'))}'
-          '/addresses/${Uri.encodeComponent(normalizedAddressId)}',
+      path: '/api/users/$userGuid/addresses/$addressGuid',
       body: {
         'label': safeLabel,
         'addressLine': safeLine,
@@ -112,12 +112,11 @@ class UserAddressService {
     required String userId,
     required String addressId,
   }) async {
-    final normalizedAddressId = _normalizeId(addressId, key: 'addressId');
+    final userGuid = _requireUserId(userId);
+    final addressGuid = _requireAddressId(addressId);
     final response = await _requestWithFallback(
       method: 'DELETE',
-      path:
-          '/api/users/${Uri.encodeComponent(_normalizeId(userId, key: 'userId'))}'
-          '/addresses/${Uri.encodeComponent(normalizedAddressId)}',
+      path: '/api/users/$userGuid/addresses/$addressGuid',
     );
     final status = response.statusCode;
     if (status >= 200 && status < 300) {
@@ -125,6 +124,22 @@ class UserAddressService {
     }
 
     throw AuthException(_extractMessage(response));
+  }
+
+  String _requireUserId(String raw) {
+    final id = tryExtractUuid(raw);
+    if (id == null || !isValidUuid(id)) {
+      throw AuthException('Geçersiz kullanıcı kimliği.');
+    }
+    return id;
+  }
+
+  String _requireAddressId(String raw) {
+    final id = tryExtractUuid(raw);
+    if (id == null || !isValidUuid(id)) {
+      throw AuthException('Geçersiz adres kimliği.');
+    }
+    return id;
   }
 
   Future<http.Response> _getWithFallback({required String path}) async {
@@ -159,8 +174,6 @@ class UserAddressService {
         if (body != null) {
           final requestBody =
               skipNormalization ? body : _normalizeRequestBody(body);
-          // Encode straight to UTF-8 bytes (avoids a full Unicode Dart String of
-          // jsonEncode output; some stacks mis-handle that string with latin1/ascii).
           request.bodyBytes = Uint8List.fromList(
             JsonUtf8Encoder().convert(requestBody),
           );
@@ -168,12 +181,7 @@ class UserAddressService {
         final streamedResponse = await request.send().timeout(
           const Duration(seconds: 8),
         );
-        final responseBytes = await streamedResponse.stream.toBytes();
-        final responseBody = utf8.decode(responseBytes);
-        final response = http.Response(
-          responseBody,
-          streamedResponse.statusCode,
-        );
+        final response = await http.Response.fromStream(streamedResponse);
         if (response.statusCode >= 200 && response.statusCode < 300) {
           return response;
         }
@@ -300,49 +308,5 @@ class UserAddressService {
       return response.body;
     }
     return 'Islem sirasinda bir hata olustu.';
-  }
-
-  static final RegExp _uuidPattern = RegExp(
-    r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
-  );
-
-  String _normalizeId(String raw, {required String key}) {
-    var trimmed = raw.trim();
-    if (trimmed.isEmpty) {
-      return trimmed;
-    }
-
-    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-      try {
-        final data = jsonDecode(trimmed);
-        if (data is Map<String, dynamic> && data[key] != null) {
-          return _normalizeId(data[key].toString(), key: key);
-        }
-      } catch (_) {}
-    }
-
-    // Double-encoded JSON string: "{\"addressId\":\"...\"}"
-    if (trimmed.length >= 2 &&
-        trimmed.startsWith('"') &&
-        trimmed.endsWith('"')) {
-      try {
-        final decoded = jsonDecode(trimmed);
-        if (decoded is String && decoded != trimmed) {
-          return _normalizeId(decoded, key: key);
-        }
-      } catch (_) {}
-    }
-
-    final embedded = _uuidPattern.stringMatch(trimmed);
-    if (embedded != null &&
-        embedded.length == trimmed.length &&
-        trimmed == embedded) {
-      return embedded.toLowerCase();
-    }
-    if (embedded != null) {
-      return embedded.toLowerCase();
-    }
-
-    return trimmed;
   }
 }

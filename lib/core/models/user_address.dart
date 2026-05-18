@@ -1,18 +1,4 @@
-final RegExp _userAddressUuid = RegExp(
-  r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
-);
-
-String _normalizeAddressIdFromJson(Object? value) {
-  final raw = value?.toString().trim() ?? '';
-  if (raw.isEmpty) {
-    return raw;
-  }
-  final match = _userAddressUuid.firstMatch(raw);
-  if (match != null) {
-    return match.group(0)!.toLowerCase();
-  }
-  return raw;
-}
+import '../utils/guid_utils.dart';
 
 class UserAddress {
   const UserAddress({
@@ -77,10 +63,11 @@ class UserAddress {
     final createdRaw =
         (json['createdAtUtc'] ?? json['CreatedAtUtc'])?.toString() ?? '';
 
+    final rawId = json['addressId'] ?? json['AddressId'];
+    final addressId = tryExtractUuid(rawId) ?? '';
+
     return UserAddress(
-      addressId: _normalizeAddressIdFromJson(
-        json['addressId'] ?? json['AddressId'],
-      ),
+      addressId: addressId,
       label: str('label', 'Label'),
       addressLine: str('addressLine', 'AddressLine'),
       addressDetail: strNullable('addressDetail', 'AddressDetail'),
