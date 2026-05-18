@@ -1,5 +1,7 @@
 # Test Verileri – Vaveyla Uygulama
 
+> **E-posta / şifre sıfırlama:** `@vaveyla.com` adresleri yalnızca veritabanı test kayıtlarıdır; gerçek posta kutusu yoktur. Şifre sıfırlama mail testi için **gerçek Gmail** ile kayıtlı hesap kullanın. SMTP kurulumu: `backend/Vaveyla.Api/README.md`
+
 ## Giriş Bilgileri
 
 ### Müşteri (Customer) – Adres ekleme / ödeme testi

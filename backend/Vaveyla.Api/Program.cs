@@ -52,7 +52,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<VaveylaDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
-builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
+builder.Services.Configure<EmailSettings>(
+    builder.Configuration.GetSection(EmailSettings.SectionName));
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IFeedbackRepository, FeedbackRepository>();
 builder.Services.AddScoped<IFeedbackAppService, FeedbackAppService>();
@@ -95,6 +96,11 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+EmailConfigurationDiagnostics.LogStartupConfiguration(
+    app.Configuration,
+    app.Environment,
+    app.Logger);
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

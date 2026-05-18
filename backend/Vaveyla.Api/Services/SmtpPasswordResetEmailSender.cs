@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Hosting;
@@ -23,83 +24,146 @@ public sealed class SmtpPasswordResetEmailSender : IPasswordResetEmailSender
         _logger = logger;
     }
 
-    public async Task SendResetCodeAsync(string toEmail, string resetCode, CancellationToken cancellationToken)
+    public async Task SendResetCodeAsync(
+        string toEmail,
+        string resetCode,
+        CancellationToken cancellationToken)
     {
-        var smtpConfigured =
-            !string.IsNullOrWhiteSpace(_emailSettings.SmtpHost) &&
-            !string.IsNullOrWhiteSpace(_emailSettings.FromAddress) &&
-            !string.IsNullOrWhiteSpace(_emailSettings.Username);
-
-        if (!smtpConfigured)
+        if (!EmailConfigurationValidator.IsSmtpConfigured(_emailSettings))
         {
-            if (_environment.IsDevelopment())
-            {
-                _logger.LogWarning(
-                    "SMTP yapılandırılmadı. Geliştirme modunda doğrulama kodu loglanıyor. "
-                    + "E-posta={Email}, Kod={ResetCode}",
-                    toEmail,
-                    resetCode);
-                return;
-            }
-
-            _logger.LogError(
-                "Password reset e-postası gönderilemedi: Email:SmtpHost, FromAddress veya Username eksik.");
-            throw new InvalidOperationException(
-                "E-posta servisi yapılandırılmamış. Lütfen sistem yöneticisine başvurun.");
+            LogDevelopmentCodeHint(toEmail, resetCode, "SMTP yapılandırması eksik");
+            throw new SmtpSendException(
+                EmailConfigurationDiagnostics.GetUserFacingSmtpErrorMessage(_environment),
+                "Email:SmtpHost, Username, Password veya FromAddress eksik.");
         }
 
-        // Gmail app passwords are 16 chars; Google often shows them with spaces — SMTP auth expects no spaces.
-        var username = _emailSettings.Username?.Trim() ?? string.Empty;
-        var password = (_emailSettings.Password ?? string.Empty).Replace(" ", string.Empty);
+        var username = _emailSettings.Username.Trim();
+        var password = _emailSettings.Password.Replace(" ", string.Empty).Trim();
+        var fromAddress = _emailSettings.FromAddress.Trim();
 
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(_emailSettings.FromName, _emailSettings.FromAddress));
+        message.From.Add(new MailboxAddress(_emailSettings.FromName, fromAddress));
         message.To.Add(MailboxAddress.Parse(toEmail));
-        message.Subject = "Vaveyla - Sifre Sifirlama Dogrulama Kodu";
+        message.Subject = "Vaveyla - Şifre Sıfırlama Doğrulama Kodu";
         message.Body = new TextPart("plain") { Text = BuildBody(resetCode) };
 
         var secureSocket = ResolveSecureSocketOptions(_emailSettings.SmtpPort, _emailSettings.EnableSsl);
+        var timeoutMs = Math.Clamp(_emailSettings.SmtpTimeoutSeconds, 5, 120) * 1000;
 
-        using var client = new SmtpClient();
+        using var client = new SmtpClient { Timeout = timeoutMs };
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeoutMs);
+
         try
         {
             await client.ConnectAsync(
-                _emailSettings.SmtpHost,
+                _emailSettings.SmtpHost.Trim(),
                 _emailSettings.SmtpPort,
                 secureSocket,
-                cancellationToken);
+                timeoutCts.Token);
 
-            if (!string.IsNullOrWhiteSpace(username))
-            {
-                await client.AuthenticateAsync(username, password, cancellationToken);
-            }
-
-            await client.SendAsync(message, cancellationToken);
-            await client.DisconnectAsync(true, cancellationToken);
-            _logger.LogInformation("Password reset code e-mail sent to {Email}.", toEmail);
+            await client.AuthenticateAsync(username, password, timeoutCts.Token);
+            await client.SendAsync(message, timeoutCts.Token);
+            await client.DisconnectAsync(true, timeoutCts.Token);
+            _logger.LogInformation(
+                "Şifre sıfırlama e-postası gönderildi. Alıcı={Email}, Host={Host}, Port={Port}",
+                toEmail,
+                _emailSettings.SmtpHost,
+                _emailSettings.SmtpPort);
         }
         catch (Exception ex)
         {
-            if (_environment.IsDevelopment())
+            LogSmtpFailure(ex, toEmail, resetCode);
+            throw new SmtpSendException(
+                EmailConfigurationDiagnostics.GetUserFacingSmtpErrorMessage(_environment),
+                ex.Message,
+                ex);
+        }
+    }
+
+    private void LogSmtpFailure(Exception ex, string toEmail, string resetCode)
+    {
+        var category = ClassifySmtpException(ex);
+        _logger.LogError(
+            ex,
+            "SMTP gönderimi başarısız [{Category}]. Host={Host}, Port={Port}, Alıcı={Email}, "
+            + "EnableSsl={EnableSsl}, ExceptionType={ExceptionType}",
+            category,
+            _emailSettings.SmtpHost,
+            _emailSettings.SmtpPort,
+            toEmail,
+            _emailSettings.EnableSsl,
+            ex.GetType().Name);
+
+        if (_environment.IsDevelopment())
+        {
+            LogDevelopmentCodeHint(
+                toEmail,
+                resetCode,
+                $"Hata kategorisi: {category} (yalnızca geliştirici logu; istemciye başarı dönülmez)");
+        }
+    }
+
+    private void LogDevelopmentCodeHint(string toEmail, string resetCode, string reason)
+    {
+        if (!_environment.IsDevelopment())
+        {
+            return;
+        }
+
+        _logger.LogWarning(
+            "[DEV-ONLY] {Reason}. Alıcı={Email}, Kod={ResetCode}. "
+            + "Not: @vaveyla.com adresleri gerçek posta kutusu değildir; gerçek Gmail ile test edin.",
+            reason,
+            toEmail,
+            resetCode);
+    }
+
+    private static string ClassifySmtpException(Exception ex)
+    {
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is OperationCanceledException)
             {
-                _logger.LogWarning(
-                    ex,
-                    "SMTP gönderilemedi (geliştirme modu). Doğrulama kodu aşağıda — "
-                    + "Gmail uygulama şifresi için: https://support.google.com/accounts/answer/185833 "
-                    + "E-posta={Email}, Kod={ResetCode}",
-                    toEmail,
-                    resetCode);
-                return;
+                return "ConnectionTimeout";
             }
 
-            _logger.LogError(
-                ex,
-                "SMTP gönderimi başarısız. Host={Host}, Port={Port}, To={Email}",
-                _emailSettings.SmtpHost,
-                _emailSettings.SmtpPort,
-                toEmail);
-            throw;
+            if (current is SocketException socketEx)
+            {
+                return socketEx.SocketErrorCode switch
+                {
+                    SocketError.TimedOut => "ConnectionTimeout",
+                    _ => "ConnectionFailed",
+                };
+            }
+
+            if (current is SslHandshakeException)
+            {
+                return "SslTlsFailure";
+            }
+
+            if (current is AuthenticationException)
+            {
+                return "AuthenticationFailed";
+            }
+
+            var message = current.Message;
+            if (message.Contains("535", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("authentication", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("credentials", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("username and password", StringComparison.OrdinalIgnoreCase))
+            {
+                return "InvalidCredentialsOrGmailRejected";
+            }
+
+            if (message.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("timeout", StringComparison.OrdinalIgnoreCase))
+            {
+                return "ConnectionTimeout";
+            }
         }
+
+        return "SmtpSendFailed";
     }
 
     private static SecureSocketOptions ResolveSecureSocketOptions(int port, bool enableSsl)
@@ -115,9 +179,9 @@ public sealed class SmtpPasswordResetEmailSender : IPasswordResetEmailSender
     private static string BuildBody(string resetCode)
     {
         return
-            "Sifre sifirlama talebiniz alindi.\n\n" +
-            $"Dogrulama kodunuz: {resetCode}\n\n" +
-            "Bu kod 10 dakika boyunca gecerlidir.\n" +
-            "Eger bu islemi siz yapmadiysaniz bu e-postayi dikkate almayabilirsiniz.";
+            "Şifre sıfırlama talebiniz alındı.\n\n" +
+            $"Doğrulama kodunuz: {resetCode}\n\n" +
+            "Bu kod 10 dakika boyunca geçerlidir.\n" +
+            "Bu işlemi siz yapmadıysanız bu e-postayı dikkate almayabilirsiniz.";
     }
 }

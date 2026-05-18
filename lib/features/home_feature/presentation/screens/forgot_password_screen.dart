@@ -74,9 +74,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (raw.contains('400') || raw.contains('geçerli')) {
       return 'Geçerli bir e-posta adresi girin.';
     }
-    if (raw.contains('500') || raw.contains('gonderilemedi') || raw.contains('gönderilemedi')) {
-      return 'Doğrulama kodu gönderilemedi. E-posta ayarları veya bağlantı sorunu olabilir. '
-          'Lütfen daha sonra tekrar deneyin.';
+    if (raw.contains('503') ||
+        raw.contains('500') ||
+        raw.contains('smtp') ||
+        raw.contains('gonderilemedi') ||
+        raw.contains('gönderilemedi')) {
+      return 'E-posta gönderilemedi. SMTP ayarlarını kontrol edin veya daha sonra tekrar deneyin.';
     }
     if (raw.contains('bağlan') || raw.contains('baglan') || raw.contains('sunucu')) {
       return 'Sunucuya bağlanılamadı. API\'nin çalıştığından emin olun.';
@@ -145,9 +148,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final colors = context.theme.appColors;
     final email = _emailController.text.trim();
     final code = _codeController.text.trim();
-    if (code.length < 4) {
+    if (code.length != 6) {
       _showMessage(
-        message: 'Doğrulama kodunu eksiksiz girin.',
+        message: 'Doğrulama kodu 6 haneli olmalıdır.',
         backgroundColor: colors.error,
       );
       return;
@@ -325,7 +328,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             const SizedBox(height: Dimens.largePadding),
             AppButton(
-              title: _isSubmitting ? 'Gönderiliyor...' : 'Bağlantıyı Gönder',
+              title: _isSubmitting ? 'Gönderiliyor...' : 'Doğrulama Kodu Gönder',
               onPressed: _isSubmitting ? null : _requestCode,
               margin: EdgeInsets.zero,
               borderRadius: 14,

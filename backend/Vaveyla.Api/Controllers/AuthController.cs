@@ -213,13 +213,6 @@ public sealed class AuthController : ControllerBase
         }
 
         var resetCode = GenerateResetCode();
-        var codeHash = BCrypt.Net.BCrypt.HashPassword(resetCode);
-        var expiresAtUtc = DateTime.UtcNow.AddMinutes(10);
-        await _users.UpdatePasswordResetChallengeAsync(
-            user.UserId,
-            codeHash,
-            expiresAtUtc,
-            cancellationToken);
 
         try
         {
@@ -228,16 +221,31 @@ public sealed class AuthController : ControllerBase
                 resetCode,
                 cancellationToken);
         }
+        catch (SmtpSendException ex)
+        {
+            _logger.LogWarning(
+                "Şifre sıfırlama e-postası gönderilemedi; kod veritabanına yazılmadı. Email={Email}",
+                email);
+            return StatusCode(503, new { message = ex.UserMessage });
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Password reset e-mail could not be sent for {Email}.", email);
+            _logger.LogError(ex, "Şifre sıfırlama e-postası beklenmeyen hata. Email={Email}", email);
             return StatusCode(500, new
             {
-                message = "Doğrulama kodu gönderilemedi. Lütfen daha sonra tekrar deneyin.",
+                message = EmailConfigurationDiagnostics.SmtpFailedProductionMessage,
             });
         }
 
-        return Ok(new { message = "Doğrulama kodu e-posta adresinize gönderildi." });
+        var codeHash = BCrypt.Net.BCrypt.HashPassword(resetCode);
+        var expiresAtUtc = DateTime.UtcNow.AddMinutes(10);
+        await _users.UpdatePasswordResetChallengeAsync(
+            user.UserId,
+            codeHash,
+            expiresAtUtc,
+            cancellationToken);
+
+        return Ok(new { message = EmailConfigurationDiagnostics.SentUserMessage });
     }
 
     [HttpPost("forgot-password/verify-code")]
