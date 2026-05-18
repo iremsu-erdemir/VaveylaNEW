@@ -583,25 +583,20 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
         title: 'Adres Değiştir',
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: Dimens.largePadding),
-            child: InkWell(
-              onTap: _startAddAddressFlow,
-              borderRadius: BorderRadius.circular(28),
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: appColors.primary,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: appColors.primary.withValues(alpha: 0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+            padding: const EdgeInsets.only(right: Dimens.padding),
+            child: Material(
+              color: appColors.primary,
+              shape: const CircleBorder(),
+              elevation: 1,
+              shadowColor: appColors.primary.withValues(alpha: 0.25),
+              child: InkWell(
+                onTap: _startAddAddressFlow,
+                customBorder: const CircleBorder(),
+                child: SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: Icon(Icons.add, color: appColors.white, size: 20),
                 ),
-                child: Icon(Icons.add, color: appColors.white, size: 30),
               ),
             ),
           ),
