@@ -14,15 +14,18 @@ public sealed class UsersController : ControllerBase
     private readonly IUserRepository _users;
     private readonly IWebHostEnvironment _environment;
     private readonly IImageModerationService _imageModerationService;
+    private readonly IAccountDeletionService _accountDeletion;
 
     public UsersController(
         IUserRepository users,
         IWebHostEnvironment environment,
-        IImageModerationService imageModerationService)
+        IImageModerationService imageModerationService,
+        IAccountDeletionService accountDeletion)
     {
         _users = users;
         _environment = environment;
         _imageModerationService = imageModerationService;
+        _accountDeletion = accountDeletion;
     }
 
     [HttpGet("{userId:guid}/profile")]
@@ -210,10 +213,16 @@ public sealed class UsersController : ControllerBase
             AddressId = Guid.NewGuid(),
             UserId = userId,
             Label = request.Label.Trim(),
+            LabelType = request.LabelType,
             AddressLine = request.AddressLine.Trim(),
             AddressDetail = string.IsNullOrWhiteSpace(request.AddressDetail)
                 ? null
                 : request.AddressDetail.Trim(),
+            Floor = request.Floor?.Trim(),
+            Apartment = request.Apartment?.Trim(),
+            DirectionsNote = request.DirectionsNote?.Trim(),
+            Latitude = request.Latitude,
+            Longitude = request.Longitude,
             IsSelected = shouldSelect
         };
 
@@ -254,10 +263,16 @@ public sealed class UsersController : ControllerBase
         }
 
         address.Label = request.Label.Trim();
+        address.LabelType = request.LabelType;
         address.AddressLine = request.AddressLine.Trim();
         address.AddressDetail = string.IsNullOrWhiteSpace(request.AddressDetail)
             ? null
             : request.AddressDetail.Trim();
+        address.Floor = request.Floor?.Trim();
+        address.Apartment = request.Apartment?.Trim();
+        address.DirectionsNote = request.DirectionsNote?.Trim();
+        address.Latitude = request.Latitude;
+        address.Longitude = request.Longitude;
         address.IsSelected = request.IsSelected;
 
         await _users.SaveChangesAsync(cancellationToken);
@@ -432,13 +447,100 @@ public sealed class UsersController : ControllerBase
         return Guid.TryParse(sub, out var callerId) && callerId == routeUserId;
     }
 
+    [HttpGet("{userId:guid}/account-deletion")]
+    public async Task<ActionResult<AccountDeletionStatusDto>> GetAccountDeletionStatus(
+        [FromRoute] Guid userId,
+        CancellationToken cancellationToken)
+    {
+        if (userId == Guid.Empty)
+            return BadRequest(new { message = "User id is required." });
+
+        try
+        {
+            return Ok(await _accountDeletion.GetStatusAsync(userId, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{userId:guid}/account-deletion")]
+    public async Task<IActionResult> ScheduleAccountDeletion(
+        [FromRoute] Guid userId,
+        [FromBody] RequestAccountDeletionBody request,
+        CancellationToken cancellationToken)
+    {
+        if (userId == Guid.Empty)
+            return BadRequest(new { message = "User id is required." });
+
+        if (!request.ConfirmDataPolicy)
+            return BadRequest(new { message = "Veri politikası onayı gereklidir." });
+
+        try
+        {
+            await _accountDeletion.ScheduleDeletionAsync(
+                userId,
+                request.Password,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                Request.Headers.UserAgent.ToString(),
+                cancellationToken);
+            return Ok(new { message = "Hesabınız silindi. Kişisel verileriniz anonimleştirildi." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpDelete("{userId:guid}/account-deletion")]
+    public async Task<IActionResult> CancelAccountDeletion(
+        [FromRoute] Guid userId,
+        CancellationToken cancellationToken)
+    {
+        if (userId == Guid.Empty)
+            return BadRequest(new { message = "User id is required." });
+
+        try
+        {
+            await _accountDeletion.CancelScheduledDeletionAsync(userId, cancellationToken);
+            return Ok(new { message = "Hesap silme iptal edildi." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{userId:guid}/addresses/validate-zone")]
+    public async Task<ActionResult<DeliveryValidationResponse>> ValidateAddressZone(
+        [FromRoute] Guid userId,
+        [FromBody] DeliveryZoneCheckRequest request,
+        [FromServices] IDeliveryRulesService deliveryRules,
+        CancellationToken cancellationToken)
+    {
+        if (userId == Guid.Empty)
+            return BadRequest(new { message = "User id is required." });
+
+        var result = await deliveryRules.ValidateDeliveryAsync(
+            new DeliveryValidationRequest(request.RestaurantId, request.Latitude, request.Longitude),
+            cancellationToken);
+        return Ok(result);
+    }
+
     private UserAddressDto MapAddress(UserAddress address)
     {
         return new UserAddressDto(
             address.AddressId,
             address.Label,
+            address.LabelType,
             address.AddressLine,
             address.AddressDetail,
+            address.Floor,
+            address.Apartment,
+            address.DirectionsNote,
+            address.Latitude,
+            address.Longitude,
             address.IsSelected,
             address.CreatedAtUtc);
     }

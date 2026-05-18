@@ -73,6 +73,33 @@ class AdminService {
     return response as Map<String, dynamic>?;
   }
 
+  Future<List<dynamic>> getRefundRequests({String? status}) async {
+    var path = '/api/admin/order-refunds';
+    if (status != null && status.isNotEmpty) {
+      path += '?status=$status';
+    }
+    final response = await _get(path);
+    if (response is List) return response;
+    return [];
+  }
+
+  Future<void> resolveRefund(String refundRequestId, bool approve, {String? note}) async {
+    await _put(
+      '/api/admin/order-refunds/$refundRequestId/resolve',
+      {'approve': approve, 'responseNote': note},
+    );
+  }
+
+  Future<List<dynamic>> getDeletionAuditLogs({String? userId}) async {
+    var path = '/api/admin/order-refunds/audit-logs';
+    if (userId != null && userId.isNotEmpty) {
+      path += '?userId=$userId';
+    }
+    final response = await _get(path);
+    if (response is List) return response;
+    return [];
+  }
+
   Map<String, String> get _headers {
     final token = AppSession.token;
     if (token.isEmpty) return const {'Content-Type': 'application/json'};

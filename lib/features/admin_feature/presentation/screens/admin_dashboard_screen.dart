@@ -10,6 +10,7 @@ import 'package:flutter_sweet_shop_app_ui/features/admin_feature/presentation/sc
 import 'package:flutter_sweet_shop_app_ui/features/admin_feature/presentation/screens/admin_coupons_list_screen.dart';
 import 'package:flutter_sweet_shop_app_ui/features/admin_feature/presentation/screens/admin_feedback_screen.dart';
 import 'package:flutter_sweet_shop_app_ui/features/admin_feature/presentation/screens/admin_marketing_banners_screen.dart';
+import 'package:flutter_sweet_shop_app_ui/features/admin_feature/presentation/screens/admin_order_refunds_screen.dart';
 import 'package:flutter_sweet_shop_app_ui/features/admin_feature/presentation/screens/admin_orders_screen.dart';
 import 'package:flutter_sweet_shop_app_ui/features/admin_feature/presentation/screens/admin_pastane_campaigns_screen.dart';
 import 'package:flutter_sweet_shop_app_ui/features/admin_feature/presentation/screens/admin_restaurants_screen.dart';
@@ -87,6 +88,13 @@ class AdminDashboardScreen extends StatelessWidget {
             title: 'Sipariş ve Finans',
             subtitle: 'Siparişler, ciro, platform kazancı',
             onTap: () => appPush(context, const AdminOrdersScreen()),
+          ),
+          const SizedBox(height: Dimens.largePadding),
+          _MenuCard(
+            icon: Icons.assignment_return,
+            title: 'İptal / İade Yönetimi',
+            subtitle: 'Müşteri iade talepleri ve hesap silme denetimi',
+            onTap: () => appPush(context, const AdminOrderRefundsScreen()),
           ),
           const SizedBox(height: Dimens.largePadding),
           _MenuCard(

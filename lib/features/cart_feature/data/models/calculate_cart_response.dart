@@ -13,6 +13,14 @@ class CalculateCartResponse {
   final String? appliedUserCouponId;
   final bool hasRestaurantDiscountSkippedForCoupon;
   final String? couponRejectReason;
+  final double subtotal;
+  final double deliveryFee;
+  final double? minimumOrderAmount;
+  final bool meetsMinimumOrder;
+  final double minimumOrderGap;
+  final double? distanceKm;
+  final bool isDeliverable;
+  final String? deliveryMessage;
 
   CalculateCartResponse({
     required this.items,
@@ -29,6 +37,14 @@ class CalculateCartResponse {
     this.appliedUserCouponId,
     this.hasRestaurantDiscountSkippedForCoupon = false,
     this.couponRejectReason,
+    this.subtotal = 0,
+    this.deliveryFee = 0,
+    this.minimumOrderAmount,
+    this.meetsMinimumOrder = true,
+    this.minimumOrderGap = 0,
+    this.distanceKm,
+    this.isDeliverable = true,
+    this.deliveryMessage,
   });
 
   factory CalculateCartResponse.fromJson(Map<String, dynamic> json) {
@@ -59,6 +75,14 @@ class CalculateCartResponse {
       appliedUserCouponId: json['appliedUserCouponId']?.toString(),
       hasRestaurantDiscountSkippedForCoupon: json['hasRestaurantDiscountSkippedForCoupon'] == true,
       couponRejectReason: json['couponRejectReason']?.toString(),
+      subtotal: _parseDouble(json['subtotal']) ?? 0,
+      deliveryFee: _parseDouble(json['deliveryFee']) ?? 0,
+      minimumOrderAmount: _parseDouble(json['minimumOrderAmount']),
+      meetsMinimumOrder: json['meetsMinimumOrder'] != false,
+      minimumOrderGap: _parseDouble(json['minimumOrderGap']) ?? 0,
+      distanceKm: _parseDouble(json['distanceKm']),
+      isDeliverable: json['isDeliverable'] != false,
+      deliveryMessage: json['deliveryMessage']?.toString(),
     );
   }
 

@@ -10,6 +10,8 @@ public enum CustomerOrderStatus : byte
     Cancelled = 6,
     /// <summary>Kurye atamayı bıraktı; restoran yeni kurye atayacak. Müşteri için iptal değildir.</summary>
     AwaitingCourierReassignment = 7,
+    /// <summary>Müşteri iade talebi oluşturdu; restoran/admin onayı bekleniyor.</summary>
+    RefundRequested = 8,
 }
 
 public sealed class CustomerOrder
@@ -41,4 +43,16 @@ public sealed class CustomerOrder
     public DateTime CreatedAtUtc { get; set; }
     /// <summary>Restoran reddi veya diğer iptal senaryolarında müşteriye iletilen açıklama.</summary>
     public string? RejectionReason { get; set; }
+    public decimal Subtotal { get; set; }
+    public decimal DeliveryFee { get; set; }
+    public string? PaymentMethod { get; set; }
+    public string? OrderNotes { get; set; }
+    public OrderCancelReason? CancellationReason { get; set; }
+    public string? CancellationReasonNote { get; set; }
+    public DateTime? CancelledAtUtc { get; set; }
+    public string? CancelledByRole { get; set; }
+
+    public List<CustomerOrderLineItem> LineItems { get; set; } = [];
+    public List<OrderStatusHistory> StatusHistory { get; set; } = [];
+    public List<OrderRefundRequest> RefundRequests { get; set; } = [];
 }

@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_sweet_shop_app_ui/core/models/user_profile.dart';
 import 'package:flutter_sweet_shop_app_ui/core/services/app_session.dart';
 import 'package:flutter_sweet_shop_app_ui/core/services/auth_logout.dart';
+import 'package:flutter_sweet_shop_app_ui/core/services/account_deletion_service.dart';
 import 'package:flutter_sweet_shop_app_ui/core/services/auth_service.dart';
 import 'package:flutter_sweet_shop_app_ui/core/services/notification_service.dart';
 import 'package:flutter_sweet_shop_app_ui/core/services/user_profile_service.dart';
@@ -436,6 +437,81 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
+  Future<void> _handleAccountDeletion() async {
+    final passwordController = TextEditingController();
+    var confirmPolicy = false;
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Hesap Silme'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Hesabınız onaylandığında hemen silinir ve kişisel verileriniz '
+                    'KVKK kapsamında anonimleştirilir. Sipariş geçmişi yasal '
+                    'yükümlülükler için anonim tutulur. Bu işlem geri alınamaz.',
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Şifreniz',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: confirmPolicy,
+                    onChanged: (v) =>
+                        setDialogState(() => confirmPolicy = v ?? false),
+                    title: const Text('Veri politikasını okudum ve onaylıyorum'),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(context.tr('cancel')),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Hesabı Sil'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (proceed != true || !mounted) return;
+
+    try {
+      await AccountDeletionService().scheduleDeletion(
+        userId: AppSession.userId,
+        password: passwordController.text,
+        confirmDataPolicy: confirmPolicy,
+      );
+      if (!mounted) return;
+      context.showSuccessMessage(
+        'Hesabınız silindi. Kişisel verileriniz anonimleştirildi.',
+      );
+      await performAuthLogout();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SplashScreen()),
+        (_) => false,
+      );
+    } catch (e) {
+      if (mounted) context.showErrorMessage(e);
+    }
+  }
+
   Future<void> _handleLogout() async {
     final shouldLogout = await AppConfirmDialog.show(
       context,
@@ -483,7 +559,10 @@ class _ProfileTabState extends State<ProfileTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             BorderedContainer(
-              child: ListTile(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ListTile(
                 leading: UserProfileImageWidget(
                   width: 56,
                   height: 56,
@@ -524,6 +603,8 @@ class _ProfileTabState extends State<ProfileTab> {
                                     : appColors.gray4,
                           ),
                         ),
+                  ),
+                ],
               ),
             ),
             Text(
@@ -646,11 +727,22 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
             ),
             BorderedContainer(
-              child: AppListTile(
-                onTap: _handleLogout,
-                title: context.tr('logout_action'),
-                leadingIconPath: Assets.icons.logout,
-                padding: EdgeInsets.zero,
+              child: Column(
+                spacing: Dimens.largePadding,
+                children: [
+                  AppListTile(
+                    onTap: _handleAccountDeletion,
+                    title: 'Hesabımı Sil (KVKK)',
+                    leadingIconPath: Assets.icons.trash,
+                    padding: EdgeInsets.zero,
+                  ),
+                  AppListTile(
+                    onTap: _handleLogout,
+                    title: context.tr('logout_action'),
+                    leadingIconPath: Assets.icons.logout,
+                    padding: EdgeInsets.zero,
+                  ),
+                ],
               ),
             ),
           ],

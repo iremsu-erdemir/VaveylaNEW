@@ -26,6 +26,19 @@ public sealed class User
     /// <summary>Veritabanı alanı değil; anlık UTC ile süre sonu karşılaştırması.</summary>
     public bool IsSuspended =>
         SuspendedUntilUtc != null && SuspendedUntilUtc > DateTime.UtcNow;
+
+    public bool EmailVerified { get; set; }
+    public string? EmailVerificationCodeHash { get; set; }
+    public DateTime? EmailVerificationExpiresAtUtc { get; set; }
+    public bool PhoneVerified { get; set; }
+    public string? SmsOtpCodeHash { get; set; }
+    public DateTime? SmsOtpExpiresAtUtc { get; set; }
+    public string? PasswordResetTokenUsedHash { get; set; }
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAtUtc { get; set; }
+    public DateTime? DeletionScheduledAtUtc { get; set; }
+    public string? AnonymizedDisplayName { get; set; }
+
     public List<UserAddress> Addresses { get; set; } = [];
     public List<PaymentCard> PaymentCards { get; set; } = [];
     public List<UserFeedback> Feedbacks { get; set; } = [];

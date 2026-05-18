@@ -257,7 +257,10 @@ class _CustomerChatsScreenState extends State<CustomerChatsScreen> {
   static String _deliveryPlaceholderSubtitle(CustomerOrderModel o) {
     switch (o.status) {
       case CustomerOrderStatus.canceled:
-        return 'Bu sipariş iptal edildi.';
+      case CustomerOrderStatus.refundRequested:
+        return o.status == CustomerOrderStatus.refundRequested
+            ? 'İade talebi oluşturuldu.'
+            : 'Bu sipariş iptal edildi.';
       case CustomerOrderStatus.completed:
         return 'Henüz mesaj yok · Dokunarak yazın';
       case CustomerOrderStatus.awaitingCourier:

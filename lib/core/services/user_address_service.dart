@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-import '../models/user_address.dart';
+import '../models/user_address.dart' show AddressLabelType, UserAddress, addressLabelTypeToApi;
 import '../utils/guid_utils.dart';
 import 'app_session.dart';
 import 'auth_service.dart';
@@ -56,6 +56,12 @@ class UserAddressService {
     required String addressLine,
     String? addressDetail,
     bool isSelected = true,
+    AddressLabelType labelType = AddressLabelType.other,
+    String? floor,
+    String? apartment,
+    String? directionsNote,
+    double? latitude,
+    double? longitude,
   }) async {
     final userGuid = _requireUserId(userId);
     final safeLabel = _safeString(label);
@@ -69,8 +75,14 @@ class UserAddressService {
       path: '/api/users/$userGuid/addresses',
       body: {
         'label': safeLabel,
+        'labelType': addressLabelTypeToApi(labelType),
         'addressLine': safeLine,
         'addressDetail': safeDetail,
+        'floor': floor?.trim(),
+        'apartment': apartment?.trim(),
+        'directionsNote': directionsNote?.trim(),
+        'latitude': latitude,
+        'longitude': longitude,
         'isSelected': isSelected,
       },
       skipNormalization: true,
@@ -85,6 +97,12 @@ class UserAddressService {
     required String addressLine,
     String? addressDetail,
     required bool isSelected,
+    AddressLabelType labelType = AddressLabelType.other,
+    String? floor,
+    String? apartment,
+    String? directionsNote,
+    double? latitude,
+    double? longitude,
   }) async {
     final userGuid = _requireUserId(userId);
     final addressGuid = _requireAddressId(addressId);
@@ -99,13 +117,43 @@ class UserAddressService {
       path: '/api/users/$userGuid/addresses/$addressGuid',
       body: {
         'label': safeLabel,
+        'labelType': addressLabelTypeToApi(labelType),
         'addressLine': safeLine,
         'addressDetail': safeDetail,
+        'floor': floor?.trim(),
+        'apartment': apartment?.trim(),
+        'directionsNote': directionsNote?.trim(),
+        'latitude': latitude,
+        'longitude': longitude,
         'isSelected': isSelected,
       },
       skipNormalization: true,
     );
     return _decodeAddress(response);
+  }
+
+  Future<Map<String, dynamic>> validateDeliveryZone({
+    required String userId,
+    required String restaurantId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final userGuid = _requireUserId(userId);
+    final response = await _requestWithFallback(
+      method: 'POST',
+      path: '/api/users/$userGuid/addresses/validate-zone',
+      body: {
+        'restaurantId': restaurantId,
+        'latitude': latitude,
+        'longitude': longitude,
+      },
+    );
+    final status = response.statusCode;
+    if (status >= 200 && status < 300) {
+      final data = jsonDecode(response.body);
+      if (data is Map<String, dynamic>) return data;
+    }
+    throw AuthException(_extractMessage(response));
   }
 
   Future<void> deleteAddress({

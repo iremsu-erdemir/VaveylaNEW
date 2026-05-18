@@ -96,11 +96,15 @@ class CustomerCartService {
   Future<CalculateCartResponse?> calculateCart({
     required String customerUserId,
     String? userCouponId,
+    double? customerLat,
+    double? customerLng,
   }) async {
     var path = '/api/customer/cart/calculate?customerUserId=$customerUserId';
     if (userCouponId != null && userCouponId.isNotEmpty) {
       path += '&userCouponId=$userCouponId';
     }
+    if (customerLat != null) path += '&customerLat=$customerLat';
+    if (customerLng != null) path += '&customerLng=$customerLng';
     if (kDebugMode) {
       debugPrint('[API DEBUG] calculateCart: customerUserId=$customerUserId userCouponId=$userCouponId');
     }

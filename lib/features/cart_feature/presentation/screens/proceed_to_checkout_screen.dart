@@ -10,6 +10,7 @@ import 'package:flutter_sweet_shop_app_ui/core/widgets/app_svg_viewer.dart';
 import 'package:flutter_sweet_shop_app_ui/core/widgets/bordered_container.dart';
 import 'package:flutter_sweet_shop_app_ui/core/widgets/general_app_bar.dart';
 import 'package:flutter_sweet_shop_app_ui/core/services/app_session.dart';
+import 'package:flutter_sweet_shop_app_ui/core/models/user_address.dart';
 import 'package:flutter_sweet_shop_app_ui/core/services/user_address_service.dart';
 import 'package:flutter_sweet_shop_app_ui/features/cart_feature/presentation/bloc/cart_cubit.dart';
 import 'package:flutter_sweet_shop_app_ui/features/cart_feature/presentation/screens/change_address_screen.dart';
@@ -58,7 +59,8 @@ class ProceedToCheckoutScreen extends StatefulWidget {
 }
 
 class _ProceedToCheckoutScreenState extends State<ProceedToCheckoutScreen> {
-  String _deliveryAddress = 'Saraçlar Cd. Merkez, Edirne';
+  String _deliveryAddress = '';
+  UserAddress? _selectedAddress;
 
   @override
   void initState() {
@@ -75,8 +77,12 @@ class _ProceedToCheckoutScreenState extends State<ProceedToCheckoutScreen> {
       final selected = addresses.where((a) => a.isSelected).firstOrNull;
       if (selected != null && mounted) {
         setState(() {
+          _selectedAddress = selected;
           _deliveryAddress = selected.addressLine;
         });
+        if (selected.latitude != null && selected.longitude != null) {
+          context.read<CartCubit>().loadCart();
+        }
       }
     } catch (_) {}
   }
@@ -145,7 +151,7 @@ class _ProceedToCheckoutScreenState extends State<ProceedToCheckoutScreen> {
                               ? s.totalAmount
                               : loadedState!.totalAmount)
                           .round();
-                      const deliveryFee = 10;
+                      final deliveryFee = (loadedState?.deliveryFee ?? 0).round();
                       final discount = (usePassedSummary && s != null
                               ? s.totalDiscount
                               : loadedState!.totalDiscount)
@@ -154,7 +160,11 @@ class _ProceedToCheckoutScreenState extends State<ProceedToCheckoutScreen> {
                               ? s.finalPrice
                               : loadedState!.finalPrice)
                           .round();
-                      final total = productSubtotal + deliveryFee;
+                      final total = (loadedState?.finalPrice ?? (productSubtotal + deliveryFee)).round();
+                      final meetsMin = loadedState?.meetsMinimumOrder ?? true;
+                      final minGap = loadedState?.minimumOrderGap ?? 0;
+                      final isDeliverable = loadedState?.isDeliverable ?? true;
+                      final deliveryMsg = loadedState?.deliveryMessage;
 
                       final couponDiscount = usePassedSummary && s != null
                           ? s.couponDiscountAmount
@@ -245,9 +255,29 @@ class _ProceedToCheckoutScreenState extends State<ProceedToCheckoutScreen> {
                             ),
                           ],
                           PaymentDetailsItem(
-                            title: 'Teslimat',
+                            title: 'Teslimat ücreti',
                             subtitle: formatPrice(deliveryFee),
                           ),
+                          if (!meetsMin && minGap > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                'Minimum sipariş için ${formatPrice(minGap)} daha ekleyin.',
+                                style: appTypography.bodySmall.copyWith(
+                                  color: appColors.error,
+                                ),
+                              ),
+                            ),
+                          if (!isDeliverable && deliveryMsg != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                deliveryMsg,
+                                style: appTypography.bodySmall.copyWith(
+                                  color: appColors.error,
+                                ),
+                              ),
+                            ),
                           Text(
                             ' - - - - - - - -' * 10,
                             overflow: TextOverflow.clip,
@@ -353,7 +383,12 @@ class _ProceedToCheckoutScreenState extends State<ProceedToCheckoutScreen> {
           onPressed: () {
             appPush(
               context,
-              PaymentMethodsScreen(deliveryAddress: _deliveryAddress),
+              PaymentMethodsScreen(
+                deliveryAddress: _deliveryAddress,
+                deliveryAddressDetail: _selectedAddress?.fullDetailLine,
+                customerLat: _selectedAddress?.latitude,
+                customerLng: _selectedAddress?.longitude,
+              ),
             );
           },
           title: 'Ödemeye Devam Et',

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_sweet_shop_app_ui/core/services/connectivity_service.dart';
 import 'package:flutter_sweet_shop_app_ui/core/services/notification_service.dart';
+import 'package:flutter_sweet_shop_app_ui/core/widgets/offline_banner.dart';
 import 'package:flutter_sweet_shop_app_ui/features/cart_feature/presentation/bloc/cart_cubit.dart';
 import 'core/theme/theme.dart';
 import 'features/home_feature/presentation/bloc/theme_cubit.dart';
@@ -17,6 +19,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await EasyLocalization.ensureInitialized();
   await NotificationService.instance.initialize();
+  await ConnectivityService.instance.initialize();
   Intl.defaultLocale = 'tr_TR';
 
   runApp(
@@ -62,7 +65,7 @@ class App extends StatelessWidget {
         locale: locale,
         supportedLocales: context.supportedLocales,
         localizationsDelegates: context.localizationDelegates,
-        home: SplashScreen(),
+        home: const OfflineBanner(child: SplashScreen()),
       ),
     );
   }

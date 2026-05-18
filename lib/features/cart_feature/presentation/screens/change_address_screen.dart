@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_sweet_shop_app_ui/core/models/user_address.dart';
+import 'package:flutter_sweet_shop_app_ui/core/models/user_address.dart'
+    show AddressLabelType, UserAddress;
 import 'package:flutter_sweet_shop_app_ui/core/utils/guid_utils.dart';
 import 'package:flutter_sweet_shop_app_ui/core/services/app_session.dart';
 import 'package:flutter_sweet_shop_app_ui/core/services/user_address_service.dart';
@@ -148,7 +149,18 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
     }
   }
 
-  Future<void> _addNewAddress(String address) async {
+  AddressLabelType _labelTypeFromTitle(String title) {
+    final t = title.toLowerCase();
+    if (t == 'ev' || t == 'aile evi') return AddressLabelType.home;
+    if (t == 'ofis' || t == 'iş') return AddressLabelType.work;
+    return AddressLabelType.other;
+  }
+
+  Future<void> _addNewAddress(
+    String address, {
+    double? latitude,
+    double? longitude,
+  }) async {
     final details = await _showAddressDetailsBottomSheet(
       selectedAddress: address,
       actionTitle: 'Adresi Kaydet',
@@ -172,6 +184,12 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
         label: details.title,
         addressLine: address,
         addressDetail: details.addressDetail,
+        labelType: _labelTypeFromTitle(details.title),
+        floor: details.floor,
+        apartment: details.apartment,
+        directionsNote: details.directionsNote,
+        latitude: latitude,
+        longitude: longitude,
         isSelected: true,
       );
     });
@@ -399,7 +417,11 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
       return;
     }
 
-    await _addNewAddress(addressStr);
+    await _addNewAddress(
+      addressStr,
+      latitude: result?.latitude,
+      longitude: result?.longitude,
+    );
   }
 
   Future<_NewAddressDetails?> _showAddressDetailsBottomSheet({
@@ -411,6 +433,9 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
     final colors = context.theme.appColors;
     final typography = context.theme.appTypography;
     final detailController = TextEditingController(text: initialAddressDetail);
+    final floorController = TextEditingController();
+    final apartmentController = TextEditingController();
+    final directionsController = TextEditingController();
     String selectedTitle = initialTitle;
     String customTitle = initialTitle;
     final titleOptions = ['Ev', 'Ofis', 'Aile Evi', 'Diger'];
@@ -513,18 +538,51 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
                       ),
                     ],
                     const SizedBox(height: Dimens.largePadding),
-                    Text(
-                      'Adres Tarifi (Opsiyonel)',
-                      style: typography.bodyMedium.copyWith(
-                        fontWeight: FontWeight.w600,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: floorController,
+                            decoration: InputDecoration(
+                              labelText: 'Kat',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: apartmentController,
+                            decoration: InputDecoration(
+                              labelText: 'Daire',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: Dimens.padding),
+                    TextField(
+                      controller: directionsController,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        labelText: 'Tarif (opsiyonel)',
+                        hintText: 'Kapı zili, landmark vb.',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: Dimens.smallPadding),
+                    const SizedBox(height: Dimens.padding),
                     TextField(
                       controller: detailController,
                       maxLines: 2,
                       decoration: InputDecoration(
-                        hintText: 'Daire, kat, bina no vb.',
+                        labelText: 'Ek not',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -555,6 +613,9 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
                           _NewAddressDetails(
                             title: normalizedTitle,
                             addressDetail: detailController.text.trim(),
+                            floor: floorController.text.trim(),
+                            apartment: apartmentController.text.trim(),
+                            directionsNote: directionsController.text.trim(),
                           ),
                         );
                       },
@@ -569,6 +630,9 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
     );
 
     detailController.dispose();
+    floorController.dispose();
+    apartmentController.dispose();
+    directionsController.dispose();
     customTitleController.dispose();
     return result;
   }
@@ -745,8 +809,17 @@ class _ChangeAddressScreenState extends State<ChangeAddressScreen> {
 }
 
 class _NewAddressDetails {
-  const _NewAddressDetails({required this.title, required this.addressDetail});
+  const _NewAddressDetails({
+    required this.title,
+    required this.addressDetail,
+    this.floor = '',
+    this.apartment = '',
+    this.directionsNote = '',
+  });
 
   final String title;
   final String addressDetail;
+  final String floor;
+  final String apartment;
+  final String directionsNote;
 }

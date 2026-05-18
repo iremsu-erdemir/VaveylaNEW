@@ -5,6 +5,7 @@ import 'package:flutter_sweet_shop_app_ui/core/utils/check_theme_status.dart';
 import 'package:flutter_sweet_shop_app_ui/core/widgets/app_scaffold.dart';
 import 'package:flutter_sweet_shop_app_ui/core/widgets/general_app_bar.dart';
 
+import '../../screens/refund_requests_screen.dart';
 import '../orders_list_widget.dart';
 
 class OrdersTab extends StatefulWidget {
@@ -37,6 +38,19 @@ class _OrdersTabState extends State<OrdersTab>
       appBar: GeneralAppBar(
         title: context.tr('my_orders'),
         showBackIcon: false,
+        actions: [
+          IconButton(
+            tooltip: 'İade Taleplerim',
+            icon: const Icon(Icons.assignment_return_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const RefundRequestsScreen(),
+                ),
+              );
+            },
+          ),
+        ],
         height: AppBar().preferredSize.height + 56,
         bottom: TabBar(
           controller: _tabController,

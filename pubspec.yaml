@@ -36,6 +36,7 @@ dependencies:
   easy_localization: ^3.0.8
   flutter_local_notifications: ^20.1.0
   shared_preferences: ^2.5.3
+  connectivity_plus: ^6.1.4
   url_launcher: ^6.3.1
   signalr_netcore: ^1.4.4
   syncfusion_flutter_pdfviewer: ^29.2.11

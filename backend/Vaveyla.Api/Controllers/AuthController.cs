@@ -16,17 +16,20 @@ public sealed class AuthController : ControllerBase
     private readonly IJwtService _jwtService;
     private readonly ILogger<AuthController> _logger;
     private readonly IPasswordResetEmailSender _passwordResetEmailSender;
+    private readonly IVerificationService _verification;
 
     public AuthController(
         IUserRepository users,
         IJwtService jwtService,
         ILogger<AuthController> logger,
-        IPasswordResetEmailSender passwordResetEmailSender)
+        IPasswordResetEmailSender passwordResetEmailSender,
+        IVerificationService verification)
     {
         _users = users;
         _jwtService = jwtService;
         _logger = logger;
         _passwordResetEmailSender = passwordResetEmailSender;
+        _verification = verification;
     }
 
     [HttpPost("register")]
@@ -86,6 +89,15 @@ public sealed class AuthController : ControllerBase
         };
 
         await _users.CreateAsync(user, cancellationToken);
+
+        try
+        {
+            await _verification.SendEmailVerificationAsync(user.UserId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Kayıt sonrası e-posta doğrulama gönderilemedi: {Email}", email);
+        }
 
         var token = _jwtService.GenerateToken(user);
         return Ok(new AuthResponse
@@ -288,10 +300,100 @@ public sealed class AuthController : ControllerBase
             return BadRequest(new { message = "Kod geçersiz veya süresi dolmuş." });
         }
 
+        if (!string.IsNullOrWhiteSpace(user.PasswordResetTokenUsedHash) &&
+            BCrypt.Net.BCrypt.Verify(code, user.PasswordResetTokenUsedHash))
+        {
+            return BadRequest(new { message = "Bu kod daha önce kullanılmış." });
+        }
+
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
-        await _users.UpdatePasswordAndClearResetAsync(user.UserId, passwordHash, cancellationToken);
+        var usedTokenHash = BCrypt.Net.BCrypt.HashPassword(code);
+        await _users.UpdatePasswordAndClearResetAsync(
+            user.UserId,
+            passwordHash,
+            usedTokenHash,
+            cancellationToken);
 
         return Ok(new { message = "Şifreniz başarıyla güncellendi." });
+    }
+
+    [HttpPost("verify-email/send")]
+    public async Task<IActionResult> SendEmailVerification(
+        [FromQuery] Guid userId,
+        CancellationToken cancellationToken)
+    {
+        if (userId == Guid.Empty)
+            return BadRequest(new { message = "User id is required." });
+
+        try
+        {
+            await _verification.SendEmailVerificationAsync(userId, cancellationToken);
+            return Ok(new { message = "Doğrulama kodu e-posta adresinize gönderildi." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("verify-email")]
+    public async Task<IActionResult> VerifyEmail(
+        [FromQuery] Guid userId,
+        [FromBody] VerifyEmailRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (userId == Guid.Empty)
+            return BadRequest(new { message = "User id is required." });
+
+        try
+        {
+            await _verification.VerifyEmailAsync(userId, request.Code, cancellationToken);
+            return Ok(new { message = "E-posta doğrulandı." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("verify-sms/send")]
+    public async Task<IActionResult> SendSmsOtp(
+        [FromQuery] Guid userId,
+        [FromBody] SendSmsOtpRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (userId == Guid.Empty)
+            return BadRequest(new { message = "User id is required." });
+
+        try
+        {
+            await _verification.SendSmsOtpAsync(userId, request.Phone, cancellationToken);
+            return Ok(new { message = "SMS doğrulama kodu gönderildi." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("verify-sms")]
+    public async Task<IActionResult> VerifySmsOtp(
+        [FromQuery] Guid userId,
+        [FromBody] VerifySmsOtpRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (userId == Guid.Empty)
+            return BadRequest(new { message = "User id is required." });
+
+        try
+        {
+            await _verification.VerifySmsOtpAsync(userId, request.Phone, request.Code, cancellationToken);
+            return Ok(new { message = "Telefon doğrulandı." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     private static string GenerateResetCode()

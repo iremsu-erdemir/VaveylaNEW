@@ -26,6 +26,10 @@ public sealed class VaveylaDbContext : DbContext
     public DbSet<RestaurantChatMessage> RestaurantChatMessages => Set<RestaurantChatMessage>();
     public DbSet<CustomerFavorite> CustomerFavorites => Set<CustomerFavorite>();
     public DbSet<CustomerOrder> CustomerOrders => Set<CustomerOrder>();
+    public DbSet<CustomerOrderLineItem> CustomerOrderLineItems => Set<CustomerOrderLineItem>();
+    public DbSet<OrderStatusHistory> OrderStatusHistories => Set<OrderStatusHistory>();
+    public DbSet<OrderRefundRequest> OrderRefundRequests => Set<OrderRefundRequest>();
+    public DbSet<AccountDeletionAuditLog> AccountDeletionAuditLogs => Set<AccountDeletionAuditLog>();
     public DbSet<CustomerCartItem> CustomerCartItems => Set<CustomerCartItem>();
     public DbSet<Coupon> Coupons => Set<Coupon>();
     public DbSet<UserCoupon> UserCoupons => Set<UserCoupon>();
@@ -67,6 +71,13 @@ public sealed class VaveylaDbContext : DbContext
         user.Property(x => x.SuspendedUntilUtc);
         user.Property(x => x.IsPermanentlyBanned).HasDefaultValue(false).IsRequired();
         user.Property(x => x.NotificationEnabled).HasDefaultValue(true).IsRequired();
+        user.Property(x => x.EmailVerified).HasDefaultValue(false).IsRequired();
+        user.Property(x => x.EmailVerificationCodeHash).HasMaxLength(200);
+        user.Property(x => x.PhoneVerified).HasDefaultValue(false).IsRequired();
+        user.Property(x => x.SmsOtpCodeHash).HasMaxLength(200);
+        user.Property(x => x.PasswordResetTokenUsedHash).HasMaxLength(200);
+        user.Property(x => x.IsDeleted).HasDefaultValue(false).IsRequired();
+        user.Property(x => x.AnonymizedDisplayName).HasMaxLength(120);
         user.HasIndex(x => x.Email).IsUnique();
         user.HasMany(x => x.Addresses)
             .WithOne(x => x.User)
@@ -88,6 +99,10 @@ public sealed class VaveylaDbContext : DbContext
         userAddress.Property(x => x.Label).HasMaxLength(64).IsRequired();
         userAddress.Property(x => x.AddressLine).HasMaxLength(320).IsRequired();
         userAddress.Property(x => x.AddressDetail).HasMaxLength(320);
+        userAddress.Property(x => x.LabelType).HasConversion<byte>().HasDefaultValue(AddressLabelType.Other).IsRequired();
+        userAddress.Property(x => x.Floor).HasMaxLength(20);
+        userAddress.Property(x => x.Apartment).HasMaxLength(20);
+        userAddress.Property(x => x.DirectionsNote).HasMaxLength(500);
         userAddress.Property(x => x.IsSelected).HasDefaultValue(false).IsRequired();
         userAddress.Property(x => x.CreatedAtUtc)
             .HasDefaultValueSql("SYSUTCDATETIME()")
@@ -184,6 +199,10 @@ public sealed class VaveylaDbContext : DbContext
         restaurant.Property(x => x.RestaurantDiscountApproved).HasDefaultValue(false).IsRequired();
         restaurant.Property(x => x.RestaurantDiscountIsActive).HasDefaultValue(true).IsRequired();
         restaurant.Property(x => x.IsEnabled).HasDefaultValue(true).IsRequired();
+        restaurant.Property(x => x.MinimumOrderAmount).HasPrecision(18, 2);
+        restaurant.Property(x => x.DeliveryFeePerKm).HasPrecision(18, 2).HasDefaultValue(5m).IsRequired();
+        restaurant.Property(x => x.MaxDeliveryDistanceKm).HasPrecision(18, 2).HasDefaultValue(15m).IsRequired();
+        restaurant.Property(x => x.FreeDeliveryThreshold).HasPrecision(18, 2);
         restaurant.Property(x => x.CreatedAtUtc)
             .HasDefaultValueSql("SYSUTCDATETIME()")
             .IsRequired();
@@ -308,13 +327,72 @@ public sealed class VaveylaDbContext : DbContext
             .HasConversion<byte>()
             .IsRequired();
         customerOrder.Property(x => x.RejectionReason).HasMaxLength(500);
+        customerOrder.Property(x => x.Subtotal).HasPrecision(18, 2).HasDefaultValue(0).IsRequired();
+        customerOrder.Property(x => x.DeliveryFee).HasPrecision(18, 2).HasDefaultValue(0).IsRequired();
+        customerOrder.Property(x => x.PaymentMethod).HasMaxLength(64);
+        customerOrder.Property(x => x.OrderNotes).HasMaxLength(500);
+        customerOrder.Property(x => x.CancellationReason).HasConversion<byte?>();
+        customerOrder.Property(x => x.CancellationReasonNote).HasMaxLength(500);
+        customerOrder.Property(x => x.CancelledByRole).HasMaxLength(32);
         customerOrder.Property(x => x.CreatedAtUtc)
             .HasDefaultValueSql("SYSUTCDATETIME()")
             .IsRequired();
+        customerOrder.HasMany(x => x.LineItems)
+            .WithOne(x => x.Order)
+            .HasForeignKey(x => x.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+        customerOrder.HasMany(x => x.StatusHistory)
+            .WithOne(x => x.Order)
+            .HasForeignKey(x => x.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+        customerOrder.HasMany(x => x.RefundRequests)
+            .WithOne(x => x.Order)
+            .HasForeignKey(x => x.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
         customerOrder.HasIndex(x => x.CustomerUserId);
         customerOrder.HasIndex(x => x.RestaurantId);
         customerOrder.HasIndex(x => x.Status);
         customerOrder.HasIndex(x => x.AssignedCourierUserId);
+
+        var orderLineItem = modelBuilder.Entity<CustomerOrderLineItem>();
+        orderLineItem.ToTable("CustomerOrderLineItems");
+        orderLineItem.HasKey(x => x.LineItemId);
+        orderLineItem.Property(x => x.ProductName).HasMaxLength(200).IsRequired();
+        orderLineItem.Property(x => x.ImagePath).HasMaxLength(512);
+        orderLineItem.Property(x => x.WeightKg).HasPrecision(18, 2).IsRequired();
+        orderLineItem.Property(x => x.UnitPrice).HasPrecision(18, 2).IsRequired();
+        orderLineItem.Property(x => x.LineTotal).HasPrecision(18, 2).IsRequired();
+        orderLineItem.Property(x => x.VariationJson).HasMaxLength(1000);
+        orderLineItem.HasIndex(x => x.OrderId);
+
+        var orderHistory = modelBuilder.Entity<OrderStatusHistory>();
+        orderHistory.ToTable("OrderStatusHistories");
+        orderHistory.HasKey(x => x.HistoryId);
+        orderHistory.Property(x => x.Status).HasConversion<byte>().IsRequired();
+        orderHistory.Property(x => x.Note).HasMaxLength(500);
+        orderHistory.Property(x => x.ActorRole).HasMaxLength(32);
+        orderHistory.Property(x => x.CreatedAtUtc).HasDefaultValueSql("SYSUTCDATETIME()").IsRequired();
+        orderHistory.HasIndex(x => x.OrderId);
+
+        var refundRequest = modelBuilder.Entity<OrderRefundRequest>();
+        refundRequest.ToTable("OrderRefundRequests");
+        refundRequest.HasKey(x => x.RefundRequestId);
+        refundRequest.Property(x => x.Status).HasConversion<byte>().IsRequired();
+        refundRequest.Property(x => x.Reason).HasConversion<byte>().IsRequired();
+        refundRequest.Property(x => x.ReasonNote).HasMaxLength(500);
+        refundRequest.Property(x => x.RestaurantResponse).HasMaxLength(500);
+        refundRequest.Property(x => x.CreatedAtUtc).HasDefaultValueSql("SYSUTCDATETIME()").IsRequired();
+        refundRequest.HasIndex(x => x.OrderId);
+        refundRequest.HasIndex(x => x.CustomerUserId);
+
+        var deletionAudit = modelBuilder.Entity<AccountDeletionAuditLog>();
+        deletionAudit.ToTable("AccountDeletionAuditLogs");
+        deletionAudit.HasKey(x => x.AuditId);
+        deletionAudit.Property(x => x.Action).HasMaxLength(64).IsRequired();
+        deletionAudit.Property(x => x.IpAddress).HasMaxLength(64);
+        deletionAudit.Property(x => x.UserAgent).HasMaxLength(256);
+        deletionAudit.Property(x => x.CreatedAtUtc).HasDefaultValueSql("SYSUTCDATETIME()").IsRequired();
+        deletionAudit.HasIndex(x => x.UserId);
 
         var courierLocation = modelBuilder.Entity<CourierLocationLog>();
         courierLocation.ToTable("CourierLocationLogs");

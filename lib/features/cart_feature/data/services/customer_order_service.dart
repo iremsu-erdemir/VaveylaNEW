@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_sweet_shop_app_ui/core/services/auth_service.dart';
 import 'package:flutter_sweet_shop_app_ui/features/cart_feature/data/models/customer_order_model.dart';
+import 'package:flutter_sweet_shop_app_ui/features/cart_feature/data/models/order_detail_model.dart';
 import 'package:flutter_sweet_shop_app_ui/features/cart_feature/data/models/reviewable_order_item_model.dart';
+import 'package:flutter_sweet_shop_app_ui/core/services/api_http_client.dart';
 import 'package:http/http.dart' as http;
 
 class CustomerOrderService {
@@ -17,6 +19,7 @@ class CustomerOrderService {
                 : (authService ?? AuthService()).baseUrls;
 
   final List<String> _baseUrls;
+  final ApiHttpClient _http = ApiHttpClient();
 
   Future<List<CustomerOrderModel>> getOrders({
     required String customerUserId,
@@ -79,6 +82,8 @@ class CustomerOrderService {
     String? customerName,
     String? customerPhone,
     String? userCouponId,
+    String? paymentMethod,
+    String? orderNotes,
   }) async {
     final body = <String, dynamic>{
       'restaurantId': restaurantId,
@@ -90,6 +95,8 @@ class CustomerOrderService {
       'customerLng': customerLng,
       'customerName': customerName,
       'customerPhone': customerPhone,
+      'paymentMethod': paymentMethod,
+      'orderNotes': orderNotes,
     };
     if (userCouponId != null && userCouponId.isNotEmpty) {
       body['userCouponId'] = userCouponId;
@@ -124,6 +131,74 @@ class CustomerOrderService {
           .toList();
     }
     return [];
+  }
+
+  Future<OrderDetailModel> getOrderDetail({
+    required String customerUserId,
+    required String orderId,
+  }) async {
+    final response = await _getWithFallback(
+      path: '/api/customer/orders/$orderId?customerUserId=$customerUserId',
+    );
+    final data = _decodeJson(response);
+    if (data is! Map<String, dynamic>) {
+      throw AuthException('Sipariş detayı alınamadı.');
+    }
+    return OrderDetailModel.fromJson(data);
+  }
+
+  Future<void> cancelOrder({
+    required String customerUserId,
+    required String orderId,
+    required int reason,
+    String? reasonNote,
+  }) async {
+    await _postWithFallback(
+      path: '/api/customer/orders/$orderId/cancel?customerUserId=$customerUserId',
+      body: {'reason': reason, 'reasonNote': reasonNote},
+    );
+  }
+
+  Future<void> createRefundRequest({
+    required String customerUserId,
+    required String orderId,
+    required int reason,
+    String? reasonNote,
+  }) async {
+    await _postWithFallback(
+      path:
+          '/api/customer/orders/$orderId/refund-request?customerUserId=$customerUserId',
+      body: {'reason': reason, 'reasonNote': reasonNote},
+    );
+  }
+
+  Future<List<RefundRequestModel>> getRefundRequests({
+    required String customerUserId,
+  }) async {
+    final response = await _getWithFallback(
+      path: '/api/customer/refund-requests?customerUserId=$customerUserId',
+    );
+    final data = _decodeJson(response);
+    if (data is List) {
+      return data
+          .whereType<Map>()
+          .map((e) => RefundRequestModel.fromJson(e.cast<String, dynamic>()))
+          .toList();
+    }
+    return [];
+  }
+
+  Future<Map<String, dynamic>> reorder({
+    required String customerUserId,
+    required String orderId,
+  }) async {
+    final response = await _postWithFallback(
+      path: '/api/customer/orders/$orderId/reorder?customerUserId=$customerUserId',
+      body: {},
+    );
+    final data = _decodeJson(response);
+    if (data is Map<String, dynamic>) return data;
+    return {};
   }
 
   Future<List<ReviewableOrderItemModel>> getReviewableProducts({

@@ -25,9 +25,18 @@ import '../../../../core/widgets/app_svg_viewer.dart';
 enum _PaymentMethod { paypal, applePay, googlePay }
 
 class PaymentMethodsScreen extends StatefulWidget {
-  const PaymentMethodsScreen({super.key, this.deliveryAddress = ''});
+  const PaymentMethodsScreen({
+    super.key,
+    this.deliveryAddress = '',
+    this.deliveryAddressDetail,
+    this.customerLat,
+    this.customerLng,
+  });
 
   final String deliveryAddress;
+  final String? deliveryAddressDetail;
+  final double? customerLat;
+  final double? customerLng;
 
   @override
   State<PaymentMethodsScreen> createState() => _PaymentMethodsScreenState();
@@ -47,6 +56,22 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   }
 
   bool get _isNextEnabled => _selectedMethod != null || _selectedCard != null;
+
+  String? get _selectedPaymentLabel {
+    if (_selectedCard != null) {
+      return 'Kart · ${_selectedCard!.cardAlias}';
+    }
+    switch (_selectedMethod) {
+      case _PaymentMethod.paypal:
+        return 'PayPal';
+      case _PaymentMethod.applePay:
+        return 'Apple Pay';
+      case _PaymentMethod.googlePay:
+        return 'Google Pay';
+      case null:
+        return null;
+    }
+  }
 
   Future<void> _openAddCard() async {
     final result = await appPush(context, const AddCardScreen());
@@ -119,8 +144,12 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
         items: itemsStr,
         total: total,
         deliveryAddress: widget.deliveryAddress,
+        deliveryAddressDetail: widget.deliveryAddressDetail,
+        customerLat: widget.customerLat,
+        customerLng: widget.customerLng,
         customerName: AppSession.fullName,
         userCouponId: selectedCouponId,
+        paymentMethod: _selectedPaymentLabel,
       );
       createdOrderId = createResult['id']?.toString();
       await _waitUntilOrderVisible(

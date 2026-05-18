@@ -13,7 +13,9 @@ public sealed record CalculateCartRequest(
     Guid RestaurantId,
     [property: JsonPropertyName("items")] List<CalculateCartItemRequest> Items,
     [property: JsonPropertyName("customerUserId")] Guid? CustomerUserId = null,
-    [property: JsonPropertyName("userCouponId")] Guid? UserCouponId = null);
+    [property: JsonPropertyName("userCouponId")] Guid? UserCouponId = null,
+    [property: JsonPropertyName("customerLat")] double? CustomerLat = null,
+    [property: JsonPropertyName("customerLng")] double? CustomerLng = null);
 
 public sealed record CalculateCartItemResponse(
     Guid ProductId,
@@ -37,7 +39,15 @@ public sealed record CalculateCartResponse(
     [property: JsonPropertyName("couponDiscountAmount")] decimal CouponDiscountAmount = 0,
     [property: JsonPropertyName("appliedUserCouponId")] Guid? AppliedUserCouponId = null,
     [property: JsonPropertyName("hasRestaurantDiscountSkippedForCoupon")] bool HasRestaurantDiscountSkippedForCoupon = false,
-    [property: JsonPropertyName("couponRejectReason")] string? CouponRejectReason = null);
+    [property: JsonPropertyName("couponRejectReason")] string? CouponRejectReason = null,
+    [property: JsonPropertyName("subtotal")] decimal Subtotal = 0,
+    [property: JsonPropertyName("deliveryFee")] decimal DeliveryFee = 0,
+    [property: JsonPropertyName("minimumOrderAmount")] decimal? MinimumOrderAmount = null,
+    [property: JsonPropertyName("meetsMinimumOrder")] bool MeetsMinimumOrder = true,
+    [property: JsonPropertyName("minimumOrderGap")] decimal MinimumOrderGap = 0,
+    [property: JsonPropertyName("distanceKm")] double? DistanceKm = null,
+    [property: JsonPropertyName("isDeliverable")] bool IsDeliverable = true,
+    [property: JsonPropertyName("deliveryMessage")] string? DeliveryMessage = null);
 
 public sealed record CampaignDto(
     Guid CampaignId,

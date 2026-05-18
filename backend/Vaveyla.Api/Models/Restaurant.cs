@@ -22,5 +22,13 @@ public sealed class Restaurant
     /// <summary>Restoran indirimi pasif mi? true = aktif (uygulanır), false = pasif (uygulanmaz). Restoran bu flag'i değiştirebilir.</summary>
     public bool RestaurantDiscountIsActive { get; set; } = true;
     public bool IsEnabled { get; set; } = true;
+    /// <summary>Pastane bazlı minimum sipariş tutarı (TL).</summary>
+    public decimal? MinimumOrderAmount { get; set; }
+    /// <summary>Km başına teslimat ücreti (TL).</summary>
+    public decimal DeliveryFeePerKm { get; set; } = 5m;
+    /// <summary>Maksimum teslimat mesafesi (km).</summary>
+    public decimal MaxDeliveryDistanceKm { get; set; } = 15m;
+    /// <summary>Bu tutarın üzerinde ücretsiz teslimat (opsiyonel).</summary>
+    public decimal? FreeDeliveryThreshold { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 }

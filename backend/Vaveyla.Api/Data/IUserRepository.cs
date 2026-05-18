@@ -22,6 +22,11 @@ public interface IUserRepository
     Task UpdatePasswordResetVerifiedAsync(Guid userId, DateTime verifiedAtUtc, CancellationToken cancellationToken);
 
     Task UpdatePasswordAndClearResetAsync(Guid userId, string passwordHash, CancellationToken cancellationToken);
+    Task UpdatePasswordAndClearResetAsync(
+        Guid userId,
+        string passwordHash,
+        string passwordResetTokenUsedHash,
+        CancellationToken cancellationToken);
     Task<List<UserAddress>> GetAddressesAsync(Guid userId, CancellationToken cancellationToken);
     Task<UserAddress?> GetAddressByIdAsync(Guid userId, Guid addressId, CancellationToken cancellationToken);
     Task<UserAddress> AddAddressAsync(UserAddress address, CancellationToken cancellationToken);

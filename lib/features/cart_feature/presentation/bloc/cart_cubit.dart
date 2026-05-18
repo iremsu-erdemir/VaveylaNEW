@@ -6,6 +6,7 @@ import 'package:flutter_sweet_shop_app_ui/core/services/app_session.dart';
 import 'package:flutter_sweet_shop_app_ui/features/cart_feature/data/models/calculate_cart_response.dart';
 import 'package:flutter_sweet_shop_app_ui/features/cart_feature/data/models/cart_item_model.dart';
 import 'package:flutter_sweet_shop_app_ui/features/cart_feature/data/models/product_model.dart';
+import 'package:flutter_sweet_shop_app_ui/core/services/cart_local_cache.dart';
 import 'package:flutter_sweet_shop_app_ui/features/cart_feature/data/services/customer_cart_service.dart';
 
 part 'cart_state.dart';
@@ -16,6 +17,7 @@ class CartCubit extends Cubit<CartState> {
       'Aynı anda farklı pastanelerden ürün ekleyemezsiniz. Lütfen önce sepetinizi temizleyin.';
 
   final CustomerCartService _cartService = CustomerCartService();
+  final CartLocalCache _cartCache = CartLocalCache();
   final List<CartItemModel> _items = [];
   String? _selectedUserCouponId;
   Future<void>? _loadCartMutex;
@@ -53,6 +55,7 @@ class CartCubit extends Cubit<CartState> {
       _items
         ..clear()
         ..addAll(items);
+      await _cartCache.saveCart(customerUserId, _items);
 
       try {
         final calc = await _cartService.calculateCart(
@@ -117,6 +120,12 @@ class CartCubit extends Cubit<CartState> {
             selectedUserCouponId: couponRejected ? null : _selectedUserCouponId,
             hasRestaurantDiscountSkippedForCoupon: calc.hasRestaurantDiscountSkippedForCoupon,
             couponRejectReason: couponRejected ? calc.couponRejectReason : null,
+            deliveryFee: calc.deliveryFee,
+            minimumOrderAmount: calc.minimumOrderAmount,
+            meetsMinimumOrder: calc.meetsMinimumOrder,
+            minimumOrderGap: calc.minimumOrderGap,
+            isDeliverable: calc.isDeliverable,
+            deliveryMessage: calc.deliveryMessage,
           ));
           return;
         }
@@ -131,7 +140,13 @@ class CartCubit extends Cubit<CartState> {
       }
       emit(_buildLoadedState());
     } catch (e) {
-      emit(CartError(_friendlyCartError(e)));
+      if (_items.isNotEmpty) {
+        emit(_buildLoadedState().copyWith(
+          deliveryMessage: 'Bağlantı zayıf. Son bilinen sepet gösteriliyor.',
+        ));
+      } else {
+        emit(CartError(_friendlyCartError(e)));
+      }
     }
   }
 

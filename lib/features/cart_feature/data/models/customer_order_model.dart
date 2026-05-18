@@ -7,6 +7,7 @@ enum CustomerOrderStatus {
   inTransit,
   completed,
   canceled,
+  refundRequested,
 }
 
 class CustomerOrderModel {
@@ -201,6 +202,8 @@ class CustomerOrderModel {
           return CustomerOrderStatus.canceled;
         case 7:
           return CustomerOrderStatus.awaitingCourier;
+        case 8:
+          return CustomerOrderStatus.refundRequested;
         default:
           return CustomerOrderStatus.pending;
       }
@@ -229,6 +232,9 @@ class CustomerOrderModel {
       case 'cancelled':
       case 'rejected':
         return CustomerOrderStatus.canceled;
+      case 'refundrequested':
+      case 'refund_requested':
+        return CustomerOrderStatus.refundRequested;
       case 'pending':
         return CustomerOrderStatus.pending;
       default:

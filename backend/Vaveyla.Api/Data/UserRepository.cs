@@ -137,15 +137,26 @@ public sealed class UserRepository : IUserRepository
     public Task UpdatePasswordAndClearResetAsync(
         Guid userId,
         string passwordHash,
+        CancellationToken cancellationToken) =>
+        UpdatePasswordAndClearResetAsync(userId, passwordHash, string.Empty, cancellationToken);
+
+    public Task UpdatePasswordAndClearResetAsync(
+        Guid userId,
+        string passwordHash,
+        string passwordResetTokenUsedHash,
         CancellationToken cancellationToken)
     {
+        var usedHash = string.IsNullOrWhiteSpace(passwordResetTokenUsedHash)
+            ? null
+            : passwordResetTokenUsedHash;
         return _dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
              UPDATE dbo.Users SET
                  PasswordHash = {passwordHash},
                  PasswordResetCodeHash = NULL,
                  PasswordResetCodeExpiresAtUtc = NULL,
-                 PasswordResetVerifiedAtUtc = NULL
+                 PasswordResetVerifiedAtUtc = NULL,
+                 PasswordResetTokenUsedHash = {usedHash}
              WHERE UserId = {userId}
              """,
             cancellationToken);

@@ -45,6 +45,7 @@ public static class CustomerOrderCustomerDisplay
             CustomerOrderStatus.Delivered => "completed",
             CustomerOrderStatus.Cancelled => "canceled",
             CustomerOrderStatus.AwaitingCourierReassignment => "awaitingCourier",
+            CustomerOrderStatus.RefundRequested => "refundRequested",
             _ => "pending",
         };
     }

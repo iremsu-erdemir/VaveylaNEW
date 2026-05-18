@@ -19,6 +19,8 @@ public sealed class CustomerOrdersController : ControllerBase
     private readonly INotificationService _notificationService;
     private readonly VaveylaDbContext _dbContext;
     private readonly IUserRepository _usersRepository;
+    private readonly IDeliveryRulesService _deliveryRules;
+    private readonly IOrderLifecycleService _orderLifecycle;
 
     public CustomerOrdersController(
         ICustomerOrdersRepository repository,
@@ -28,7 +30,9 @@ public sealed class CustomerOrdersController : ControllerBase
         ICouponService couponService,
         INotificationService notificationService,
         VaveylaDbContext dbContext,
-        IUserRepository usersRepository)
+        IUserRepository usersRepository,
+        IDeliveryRulesService deliveryRules,
+        IOrderLifecycleService orderLifecycle)
     {
         _repository = repository;
         _cartRepository = cartRepository;
@@ -38,6 +42,8 @@ public sealed class CustomerOrdersController : ControllerBase
         _notificationService = notificationService;
         _dbContext = dbContext;
         _usersRepository = usersRepository;
+        _deliveryRules = deliveryRules;
+        _orderLifecycle = orderLifecycle;
     }
 
     [HttpGet("orders")]
@@ -163,8 +169,37 @@ public sealed class CustomerOrdersController : ControllerBase
                     c.WeightKg,
                     c.SaleUnit)).ToList(),
                 customerUserId,
-                request.UserCouponId);
+                request.UserCouponId,
+                request.CustomerLat,
+                request.CustomerLng);
             var calcResult = await _calculationService.CalculateCartAsync(calcRequest, cancellationToken);
+
+            var (deliveryFee, distanceKm, isDeliverable, deliveryMessage) =
+                await _deliveryRules.ComputeDeliveryAsync(
+                    restaurantId,
+                    request.CustomerLat,
+                    request.CustomerLng,
+                    calcResult.FinalPrice,
+                    cancellationToken);
+
+            if (!isDeliverable)
+            {
+                return BadRequest(new { message = deliveryMessage ?? "Teslimat bölgesi dışındasınız." });
+            }
+
+            var restaurantRules = await _restaurantRepo.GetRestaurantByIdAsync(restaurantId, cancellationToken);
+            if (restaurantRules?.MinimumOrderAmount is > 0 &&
+                calcResult.FinalPrice < restaurantRules.MinimumOrderAmount.Value)
+            {
+                var gap = restaurantRules.MinimumOrderAmount.Value - calcResult.FinalPrice;
+                return BadRequest(new
+                {
+                    message = $"Minimum sipariş tutarı {restaurantRules.MinimumOrderAmount.Value:F0} TL. "
+                              + $"Eksik: {gap:F0} TL.",
+                });
+            }
+
+            var grandTotal = calcResult.FinalPrice + deliveryFee;
 
             if (request.UserCouponId.HasValue && calcResult.CouponDiscountAmount <= 0)
             {
@@ -185,7 +220,9 @@ public sealed class CustomerOrdersController : ControllerBase
                 CustomerUserId = customerUserId,
                 RestaurantId = restaurantId,
                 Items = itemsStr,
-                Total = (int)Math.Round(calcResult.FinalPrice),
+                Subtotal = calcResult.FinalPrice,
+                DeliveryFee = deliveryFee,
+                Total = (int)Math.Round(grandTotal),
                 TotalDiscount = calcResult.TotalDiscount,
                 RestaurantEarning = calcResult.RestaurantEarning,
                 PlatformEarning = calcResult.PlatformEarning,
@@ -195,11 +232,33 @@ public sealed class CustomerOrdersController : ControllerBase
                 CustomerLng = request.CustomerLng,
                 CustomerName = request.CustomerName?.Trim(),
                 CustomerPhone = request.CustomerPhone?.Trim(),
+                PaymentMethod = request.PaymentMethod?.Trim(),
+                OrderNotes = request.OrderNotes?.Trim(),
                 Status = CustomerOrderStatus.Pending,
                 CreatedAtUtc = DateTime.UtcNow,
                 AppliedUserCouponId = calcResult.AppliedUserCouponId,
                 CouponDiscountAmount = calcResult.CouponDiscountAmount > 0 ? calcResult.CouponDiscountAmount : null,
             };
+
+            order.LineItems = cartItems.Select(c =>
+            {
+                var lineOriginal = c.SaleUnit == ProductSaleUnit.PerSlice
+                    ? (decimal)c.UnitPrice * c.Quantity
+                    : (decimal)c.UnitPrice * c.WeightKg * c.Quantity;
+                return new CustomerOrderLineItem
+                {
+                    LineItemId = Guid.NewGuid(),
+                    OrderId = order.OrderId,
+                    ProductId = c.ProductId,
+                    ProductName = c.ProductName,
+                    ImagePath = c.ImagePath,
+                    Quantity = c.Quantity,
+                    WeightKg = c.WeightKg,
+                    SaleUnit = c.SaleUnit,
+                    UnitPrice = c.UnitPrice,
+                    LineTotal = lineOriginal,
+                };
+            }).ToList();
 
             var restaurant = await _restaurantRepo.GetRestaurantByIdAsync(restaurantId, cancellationToken);
             if (restaurant != null)
@@ -230,6 +289,14 @@ public sealed class CustomerOrdersController : ControllerBase
             }
 
             await _repository.CreateOrderAsync(order, cancellationToken);
+            await _orderLifecycle.AppendStatusHistoryAsync(
+                order,
+                CustomerOrderStatus.Pending,
+                "Sipariş oluşturuldu",
+                "Customer",
+                customerUserId,
+                cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
 
             // Sipariş kaydedildi; sunucu sepetini temizle (müşteri uygulaması da clearCart çağırır).
             await _cartRepository.ClearCartAsync(customerUserId, cancellationToken);
@@ -482,4 +549,6 @@ public sealed record CreateCustomerOrderRequest(
     double? CustomerLng,
     string? CustomerName,
     string? CustomerPhone,
-    Guid? UserCouponId = null);
+    Guid? UserCouponId = null,
+    string? PaymentMethod = null,
+    string? OrderNotes = null);
