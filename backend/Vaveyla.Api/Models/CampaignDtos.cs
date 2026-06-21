@@ -1,0 +1,82 @@
+using System.Text.Json.Serialization;
+
+namespace Vaveyla.Api.Models;
+
+public sealed record CalculateCartItemRequest(
+    Guid ProductId,
+    int Quantity,
+    [property: JsonPropertyName("unitPrice")] decimal UnitPrice,
+    [property: JsonPropertyName("weightKg")] decimal WeightKg = 1m,
+    byte SaleUnit = 0);
+
+public sealed record CalculateCartRequest(
+    Guid RestaurantId,
+    [property: JsonPropertyName("items")] List<CalculateCartItemRequest> Items,
+    [property: JsonPropertyName("customerUserId")] Guid? CustomerUserId = null,
+    [property: JsonPropertyName("userCouponId")] Guid? UserCouponId = null,
+    [property: JsonPropertyName("customerLat")] double? CustomerLat = null,
+    [property: JsonPropertyName("customerLng")] double? CustomerLng = null);
+
+public sealed record CalculateCartItemResponse(
+    Guid ProductId,
+    string ProductName,
+    int Quantity,
+    [property: JsonPropertyName("originalPrice")] decimal OriginalPrice,
+    [property: JsonPropertyName("discountedPrice")] decimal DiscountedPrice,
+    [property: JsonPropertyName("itemDiscount")] decimal ItemDiscount);
+
+public sealed record CalculateCartResponse(
+    [property: JsonPropertyName("items")] List<CalculateCartItemResponse> Items,
+    [property: JsonPropertyName("totalPrice")] decimal TotalPrice,
+    [property: JsonPropertyName("totalDiscount")] decimal TotalDiscount,
+    [property: JsonPropertyName("finalPrice")] decimal FinalPrice,
+    [property: JsonPropertyName("customerPaidAmount")] decimal CustomerPaidAmount,
+    [property: JsonPropertyName("restaurantEarning")] decimal RestaurantEarning,
+    [property: JsonPropertyName("platformEarning")] decimal PlatformEarning,
+    [property: JsonPropertyName("hasRestaurantDiscount")] bool HasRestaurantDiscount = false,
+    [property: JsonPropertyName("restaurantDiscountAmount")] decimal RestaurantDiscountAmount = 0,
+    [property: JsonPropertyName("canUseCoupon")] bool CanUseCoupon = true,
+    [property: JsonPropertyName("couponDiscountAmount")] decimal CouponDiscountAmount = 0,
+    [property: JsonPropertyName("appliedUserCouponId")] Guid? AppliedUserCouponId = null,
+    [property: JsonPropertyName("hasRestaurantDiscountSkippedForCoupon")] bool HasRestaurantDiscountSkippedForCoupon = false,
+    [property: JsonPropertyName("couponRejectReason")] string? CouponRejectReason = null,
+    [property: JsonPropertyName("subtotal")] decimal Subtotal = 0,
+    [property: JsonPropertyName("deliveryFee")] decimal DeliveryFee = 0,
+    [property: JsonPropertyName("minimumOrderAmount")] decimal? MinimumOrderAmount = null,
+    [property: JsonPropertyName("meetsMinimumOrder")] bool MeetsMinimumOrder = true,
+    [property: JsonPropertyName("minimumOrderGap")] decimal MinimumOrderGap = 0,
+    [property: JsonPropertyName("distanceKm")] double? DistanceKm = null,
+    [property: JsonPropertyName("isDeliverable")] bool IsDeliverable = true,
+    [property: JsonPropertyName("deliveryMessage")] string? DeliveryMessage = null);
+
+public sealed record CampaignDto(
+    Guid CampaignId,
+    string Name,
+    string? Description,
+    int DiscountType,
+    decimal DiscountValue,
+    int TargetType,
+    Guid? TargetId,
+    string? TargetCategoryName,
+    decimal? MinCartAmount,
+    bool IsActive,
+    string Status,
+    int DiscountOwner,
+    Guid? RestaurantId,
+    string? RestaurantName,
+    DateTime StartDate,
+    DateTime EndDate,
+    DateTime CreatedAtUtc);
+
+public sealed record CreateCampaignRequest(
+    string Name,
+    string? Description,
+    int DiscountType,
+    decimal DiscountValue,
+    int TargetType,
+    Guid? TargetId,
+    string? TargetCategoryName,
+    decimal? MinCartAmount,
+    int DiscountOwner,
+    DateTime StartDate,
+    DateTime EndDate);
